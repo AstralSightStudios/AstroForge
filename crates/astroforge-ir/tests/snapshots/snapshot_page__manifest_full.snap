@@ -1,0 +1,33 @@
+---
+source: crates/astroforge-ir/tests/snapshot_page.rs
+expression: watch_manifest()
+---
+{
+  "package": "com.astroforge.fixture.hello",
+  "name": "fixture-01-hello-text",
+  "version_name": "1.0.0",
+  "version_code": 1,
+  "min_platform_version": 1200,
+  "icon": "/common/logo.png",
+  "simulation_version": "default",
+  "device_type_list": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.router"
+    }
+  ],
+  "config": {
+    "log_level": "log",
+    "design_width": "device-width"
+  },
+  "router": {
+    "entry": "pages/index",
+    "pages": {
+      "pages/index": {
+        "component": "index"
+      }
+    }
+  }
+}

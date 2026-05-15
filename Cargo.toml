@@ -1,0 +1,52 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/astroforge-cli",
+    "crates/astroforge-ir",
+    "crates/astroforge-compiler",
+    "crates/astroforge-vela",
+    "crates/astroforge-packager",
+    "crates/astroforge-device",
+    "crates/astroforge-compat",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.89"
+license = "ISC"
+repository = "https://github.com/searchstars/AstroForge"
+description = "A modern, Rust-powered toolchain for smartwatch quick apps with a React-like development experience."
+
+[workspace.dependencies]
+# Crate-internal
+astroforge-ir = { path = "crates/astroforge-ir" }
+astroforge-compiler = { path = "crates/astroforge-compiler" }
+astroforge-vela = { path = "crates/astroforge-vela" }
+astroforge-packager = { path = "crates/astroforge-packager" }
+astroforge-device = { path = "crates/astroforge-device" }
+astroforge-compat = { path = "crates/astroforge-compat" }
+
+# Common deps
+anyhow = "1.0"
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+schemars = { version = "0.8", features = ["indexmap2", "preserve_order"] }
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+indexmap = { version = "2.5", features = ["serde"] }
+camino = { version = "1.1", features = ["serde1"] }
+walkdir = "2.5"
+zip = { version = "2.2", default-features = false, features = ["deflate", "time"] }
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

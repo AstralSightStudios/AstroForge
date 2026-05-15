@@ -1,0 +1,20 @@
+[package]
+name = "astroforge-packager"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AstroForge rpk 装配与签名。"
+
+[dependencies]
+astroforge-ir = { workspace = true }
+astroforge-vela = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+walkdir = { workspace = true }
+zip = { workspace = true }
+camino = { workspace = true }
+tracing = { workspace = true }

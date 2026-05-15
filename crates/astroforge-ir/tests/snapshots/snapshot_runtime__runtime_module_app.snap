@@ -1,0 +1,14 @@
+---
+source: crates/astroforge-ir/tests/snapshot_runtime.rs
+expression: module
+---
+{
+  "kind": "app",
+  "value": {
+    "create_handler": "createAppHandler",
+    "script_body": "{ onCreate() { console.log('app created'); }, onDestroy() {} }",
+    "style_table": [],
+    "manifest_json": "{\"package\":\"com.astroforge.fixture.hello\",\"name\":\"fixture-01-hello-text\",\"versionName\":\"1.0.0\",\"versionCode\":1,\"minPlatformVersion\":1200,\"icon\":\"/common/logo.png\",\"deviceTypeList\":[\"watch\"],\"router\":{\"entry\":\"pages/index\",\"pages\":{\"pages/index\":{\"component\":\"index\"}}}}",
+    "install_translate_style": true
+  }
+}

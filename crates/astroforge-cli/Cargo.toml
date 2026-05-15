@@ -1,0 +1,26 @@
+[package]
+name = "astroforge-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AstroForge CLI 入口（`astroforge` 可执行文件）。"
+
+[[bin]]
+name = "astroforge"
+path = "src/main.rs"
+
+[dependencies]
+astroforge-ir = { workspace = true }
+astroforge-compiler = { workspace = true }
+astroforge-vela = { workspace = true }
+astroforge-packager = { workspace = true }
+astroforge-device = { workspace = true }
+astroforge-compat = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+camino = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

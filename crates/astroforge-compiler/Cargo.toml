@@ -1,0 +1,18 @@
+[package]
+name = "astroforge-compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AstroForge 前端编译器：将 Rsbuild 产物归一化为 Component / Page IR。"
+
+[dependencies]
+astroforge-ir = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+indexmap = { workspace = true }
+camino = { workspace = true }
+tracing = { workspace = true }

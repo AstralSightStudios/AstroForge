@@ -1,0 +1,713 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IrDocument",
+  "description": "单次编译产物的根 IR 节点。",
+  "type": "object",
+  "required": [
+    "ir_version",
+    "manifest",
+    "pages"
+  ],
+  "properties": {
+    "ir_version": {
+      "description": "序列化时取 [`IR_VERSION`]，后端读到不一致版本立即拒绝处理。",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0.0
+    },
+    "manifest": {
+      "$ref": "#/definitions/Manifest"
+    },
+    "app": {
+      "description": "对应 `app.ux` 的内容。用户未提供时保留默认值，后端生成最小 app 壳。",
+      "default": {
+        "lifecycle": {}
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/AppModule"
+        }
+      ]
+    },
+    "pages": {
+      "description": "路由到页面的映射。键形如 `\"pages/index\"`，与 [`Manifest::router`] 的 `pages` 字段一一对应。",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Page"
+      }
+    },
+    "components": {
+      "description": "自定义组件表。键为模板中实际使用的 kebab-case 标签名。",
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/Component"
+      }
+    },
+    "assets": {
+      "description": "去重后的资源清单，packager 依此拷贝文件。",
+      "default": [],
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/AssetRef"
+      }
+    }
+  },
+  "definitions": {
+    "Manifest": {
+      "description": "应用清单。字段命名一比一对齐 Vela 厂商格式，详见 `docs/vela-runtime-abi.md` §8。",
+      "type": "object",
+      "required": [
+        "device_type_list",
+        "icon",
+        "min_platform_version",
+        "name",
+        "package",
+        "router",
+        "version_code",
+        "version_name"
+      ],
+      "properties": {
+        "package": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version_name": {
+          "type": "string"
+        },
+        "version_code": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "min_platform_version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "icon": {
+          "type": "string"
+        },
+        "simulation_version": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "device_type_list": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "features": {
+          "description": "`system.*` 桥接白名单。未声明的 import 会被运行时拒绝。",
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Feature"
+          }
+        },
+        "config": {
+          "default": {
+            "log_level": null,
+            "design_width": null
+          },
+          "allOf": [
+            {
+              "$ref": "#/definitions/AppConfig"
+            }
+          ]
+        },
+        "router": {
+          "$ref": "#/definitions/Router"
+        }
+      }
+    },
+    "Feature": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "AppConfig": {
+      "type": "object",
+      "properties": {
+        "log_level": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "design_width": {
+          "description": "取值 `\"device-width\"` 或具体像素数。影响 750 设计稿尺寸换算。",
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Router": {
+      "type": "object",
+      "required": [
+        "entry",
+        "pages"
+      ],
+      "properties": {
+        "entry": {
+          "type": "string"
+        },
+        "pages": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RoutePage"
+          }
+        }
+      }
+    },
+    "RoutePage": {
+      "type": "object",
+      "required": [
+        "component"
+      ],
+      "properties": {
+        "component": {
+          "description": "通常固定为 `\"index\"`。每个页面 bundle 的模板都注册在 entry 槽位上。",
+          "type": "string"
+        }
+      }
+    },
+    "AppModule": {
+      "description": "应用级模块。",
+      "type": "object",
+      "properties": {
+        "lifecycle": {
+          "description": "应用生命周期方法（`onCreate`、`onDestroy` 等）。值为用户函数体源码 （不含签名），后端负责套用函数外壳。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Page": {
+      "description": "单个页面单元。",
+      "type": "object",
+      "required": [
+        "route",
+        "script",
+        "style",
+        "template"
+      ],
+      "properties": {
+        "route": {
+          "type": "string"
+        },
+        "imports": {
+          "description": "模板中可见的自定义组件表：kebab-case 标签 → [`IrDocument::components`] 中的 key。模板中未在此声明的标签视为非法。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "template": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Node"
+          }
+        },
+        "script": {
+          "$ref": "#/definitions/Script"
+        },
+        "style": {
+          "$ref": "#/definitions/StyleTable"
+        }
+      }
+    },
+    "Node": {
+      "description": "组件子树中的一个节点。\n\n采用 adjacent tagging（`{ \"kind\": ..., \"value\": ... }`）而非内部标签， 原因是部分变体携带非结构体载荷（`String`、`Vec`、`serde_json::Value`）， serde 的内部标签模式不支持此类形态。adjacent tagging 让所有变体形态对 称，未来新增变体不会引入二义性。",
+      "oneOf": [
+        {
+          "description": "内置元素或用户组件。区分依据为 [`Element::is_component`]，下沉阶段 据此选择 `__ce__` 或 `__cc__`。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "element"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/Element"
+            }
+          }
+        },
+        {
+          "description": "静态文本。JSX 空白合并规则在前端阶段完成，此处为最终呈现字符串。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "text"
+              ]
+            },
+            "value": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "description": "文本插值，例如 `{message}`。下沉为 `value: function() { return _vm_.message }`。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "expression"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/Binding"
+            }
+          }
+        },
+        {
+          "description": "`if` / `elif` / `else` 分支链。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "conditional"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/Conditional"
+            }
+          }
+        },
+        {
+          "description": "`array.map(...)` 形式的列表渲染。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "list"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/List"
+            }
+          }
+        },
+        {
+          "description": "`<Fragment>` 或 `<>`。打印阶段不产生节点，仅将子树平铺。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "fragment"
+              ]
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Node"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Element": {
+      "description": "单个元素节点。",
+      "type": "object",
+      "required": [
+        "is_component",
+        "tag"
+      ],
+      "properties": {
+        "tag": {
+          "type": "string"
+        },
+        "is_component": {
+          "description": "是否为用户组件。识别规则：PascalCase 视为组件，其它视为内置元素。 在解析阶段一次性确定，避免下沉阶段重复判别。",
+          "type": "boolean"
+        },
+        "attrs": {
+          "description": "属性集合。使用 [`IndexMap`] 以保留源码顺序——厂商产物的属性顺序稳定， 对照测试需按位对齐。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Attr"
+          }
+        },
+        "events": {
+          "description": "事件回调表。键为运行时事件名（去 `on` 前缀、全小写），例如 `onClick` 映射为 `\"click\"`，`oncardtap` 映射为 `\"cardtap\"`。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Binding"
+          }
+        },
+        "children": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Node"
+          }
+        }
+      }
+    },
+    "Attr": {
+      "description": "属性值。\n\n标签策略与 [`Node`] 一致，使用 adjacent tagging。",
+      "oneOf": [
+        {
+          "description": "字面量。任意 JSON 可序列化值，原样下沉为运行时 opts 中的静态项。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "static"
+              ]
+            },
+            "value": true
+          }
+        },
+        {
+          "description": "来自 TSX 作用域的绑定，下沉为闭包以支持响应式更新。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "dynamic"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/Binding"
+            }
+          }
+        }
+      ]
+    },
+    "Binding": {
+      "description": "对视图模型上某个值的引用。\n\n仅记录路径而不记录表达式 AST：下沉阶段只需将 `path` 拼入 `function() { return _vm_.<path>; }` 的字符串模板。响应式追踪仅作用于路 径根段，嵌套字段访问由 JS 成员表达式自然承担。",
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "description": "形如 `\"message\"` 或 `\"user.name\"`。",
+          "type": "string"
+        },
+        "is_callable": {
+          "description": "是否指向函数。`true` 时下沉为 `function(evt) { return _vm_.<path>(evt) }`；`false` 时按值读取。",
+          "default": false,
+          "type": "boolean"
+        }
+      }
+    },
+    "Conditional": {
+      "description": "`if` / `elif` / `else` 条件链。",
+      "type": "object",
+      "required": [
+        "branches"
+      ],
+      "properties": {
+        "branches": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConditionalBranch"
+          }
+        }
+      }
+    },
+    "ConditionalBranch": {
+      "type": "object",
+      "required": [
+        "body"
+      ],
+      "properties": {
+        "guard": {
+          "description": "末尾 `else` 分支的 guard 为 `None`，其余分支必填。",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Binding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Node"
+          }
+        }
+      }
+    },
+    "List": {
+      "description": "列表渲染节点。",
+      "type": "object",
+      "required": [
+        "body",
+        "item_var",
+        "source"
+      ],
+      "properties": {
+        "source": {
+          "description": "被迭代的集合。",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Binding"
+            }
+          ]
+        },
+        "item_var": {
+          "description": "源码中循环变量的标识符。下沉阶段用作闭包形参名以保留可读性。",
+          "type": "string"
+        },
+        "index_var": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "key": {
+          "description": "节点 key 的提取路径。`None` 时运行时按索引复用节点。",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Binding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Node"
+          }
+        }
+      }
+    },
+    "Script": {
+      "description": "脚本部分：响应式数据、方法、生命周期、props（仅组件）。",
+      "type": "object",
+      "properties": {
+        "props": {
+          "description": "组件 props 定义。页面单元此字段保持为空。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/Prop"
+          }
+        },
+        "private_data": {
+          "description": "私有响应式数据。Vela 运行时将 `public` / `protected` / `private` 三 个访问性桶合并为 `data`。MVP 仅暴露 `private`，其余暂不开放。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": true
+        },
+        "methods": {
+          "description": "方法体源码。值为完整函数表达式（`function (...) { ... }` 或箭头形 式），由前端 TS 流水线产生，后端原样写入脚本模块。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "lifecycle": {
+          "description": "页面或组件级生命周期方法（`onInit` / `onReady` / `onShow` / `onHide` 等）。值规则同 [`Script::methods`]。",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Prop": {
+      "description": "组件 prop 定义。",
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "description": "字面量取值为 `\"String\"` / `\"Number\"` / `\"Boolean\"` / `\"Object\"` / `\"Array\"` / `\"Function\"`，与厂商 props 定义的 `type` 字段对齐。",
+          "type": "string"
+        },
+        "default": true
+      }
+    },
+    "StyleTable": {
+      "description": "页面或组件作用域的样式表。下沉到运行时层时压缩为 `$app_style$` 的嵌套数组。",
+      "type": "object",
+      "required": [
+        "rules"
+      ],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StyleRule"
+          }
+        }
+      }
+    },
+    "StyleRule": {
+      "description": "单条样式规则。",
+      "type": "object",
+      "required": [
+        "declarations",
+        "selectors"
+      ],
+      "properties": {
+        "selectors": {
+          "description": "共享同一声明块的选择器列表。`.a, .b { color: red }` 在此层展开为两个 selector 共享同一 declarations。",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Selector"
+          }
+        },
+        "declarations": {
+          "description": "此层属性名保持 kebab-case。运行时层转换为 camelCase 以匹配厂商产物。",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "Selector": {
+      "type": "object",
+      "required": [
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/SelectorKind"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "SelectorKind": {
+      "description": "选择器类型。\n\n数字索引与 Vela 运行时 `StyleSelectorType.findSelectorIndex` 完全一致， 任何调整都将破坏样式表的二进制兼容性。",
+      "type": "string",
+      "enum": [
+        "class",
+        "id",
+        "tag",
+        "keyframes",
+        "font_face"
+      ]
+    },
+    "Component": {
+      "description": "自定义组件单元。",
+      "type": "object",
+      "required": [
+        "name",
+        "script",
+        "style",
+        "template"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "template": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Node"
+          }
+        },
+        "script": {
+          "$ref": "#/definitions/Script"
+        },
+        "style": {
+          "$ref": "#/definitions/StyleTable"
+        }
+      }
+    },
+    "AssetRef": {
+      "description": "静态资源引用。",
+      "type": "object",
+      "required": [
+        "digest",
+        "path",
+        "source_path"
+      ],
+      "properties": {
+        "path": {
+          "description": "相对项目 `src/` 的路径，带前导 `/`，例如 `\"/common/logo.png\"`。 运行时仅识别此种形式。",
+          "type": "string"
+        },
+        "source_path": {
+          "description": "源文件磁盘绝对路径。packager 据此读取实际字节。",
+          "type": "string"
+        },
+        "digest": {
+          "description": "内容 SHA-1。厂商 `dynamicAssets` 目录以此构造去重文件名，AstroForge 沿用同一方案，便于对照测试时 diff 资源图。",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

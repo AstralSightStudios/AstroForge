@@ -1,0 +1,9 @@
+---
+source: crates/astroforge-ir/tests/snapshot_page.rs
+expression: asset
+---
+{
+  "path": "/common/logo.png",
+  "source_path": "/Volumes/EXT0/GitHub/AstroForge/fixtures/01-hello-text/astroforge/src/common/logo.png",
+  "digest": "0123456789abcdef0123456789abcdef01234567"
+}

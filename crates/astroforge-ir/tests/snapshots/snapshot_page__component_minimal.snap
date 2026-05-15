@@ -1,0 +1,28 @@
+---
+source: crates/astroforge-ir/tests/snapshot_page.rs
+expression: component
+---
+{
+  "name": "avatar-card",
+  "template": [
+    {
+      "kind": "element",
+      "value": {
+        "tag": "text",
+        "is_component": false,
+        "attrs": {},
+        "events": {},
+        "children": []
+      }
+    }
+  ],
+  "script": {
+    "props": {},
+    "private_data": {},
+    "methods": {},
+    "lifecycle": {}
+  },
+  "style": {
+    "rules": []
+  }
+}

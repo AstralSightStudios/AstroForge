@@ -1,0 +1,24 @@
+---
+source: crates/astroforge-ir/tests/snapshot_component.rs
+expression: node
+---
+{
+  "kind": "element",
+  "value": {
+    "tag": "div",
+    "is_component": false,
+    "attrs": {
+      "class": {
+        "kind": "static",
+        "value": "title"
+      }
+    },
+    "events": {},
+    "children": [
+      {
+        "kind": "text",
+        "value": "Hello"
+      }
+    ]
+  }
+}

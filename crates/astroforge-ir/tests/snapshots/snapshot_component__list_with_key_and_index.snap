@@ -1,0 +1,39 @@
+---
+source: crates/astroforge-ir/tests/snapshot_component.rs
+expression: node
+---
+{
+  "kind": "list",
+  "value": {
+    "source": {
+      "path": "users",
+      "is_callable": false
+    },
+    "item_var": "user",
+    "index_var": "idx",
+    "key": {
+      "path": "user.id",
+      "is_callable": false
+    },
+    "body": [
+      {
+        "kind": "element",
+        "value": {
+          "tag": "div",
+          "is_component": false,
+          "attrs": {},
+          "events": {},
+          "children": [
+            {
+              "kind": "expression",
+              "value": {
+                "path": "user.name",
+                "is_callable": false
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

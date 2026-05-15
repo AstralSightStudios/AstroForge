@@ -1,0 +1,31 @@
+---
+source: crates/astroforge-ir/tests/snapshot_component.rs
+expression: node
+---
+{
+  "kind": "element",
+  "value": {
+    "tag": "AvatarCard",
+    "is_component": true,
+    "attrs": {
+      "name": {
+        "kind": "dynamic",
+        "value": {
+          "path": "user.name",
+          "is_callable": false
+        }
+      },
+      "color": {
+        "kind": "static",
+        "value": "#E91E63"
+      }
+    },
+    "events": {
+      "cardtap": {
+        "path": "onCardTap",
+        "is_callable": true
+      }
+    },
+    "children": []
+  }
+}

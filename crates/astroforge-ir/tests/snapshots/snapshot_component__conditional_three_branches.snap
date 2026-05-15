@@ -1,0 +1,44 @@
+---
+source: crates/astroforge-ir/tests/snapshot_component.rs
+expression: node
+---
+{
+  "kind": "conditional",
+  "value": {
+    "branches": [
+      {
+        "guard": {
+          "path": "isLoading",
+          "is_callable": false
+        },
+        "body": [
+          {
+            "kind": "text",
+            "value": "Loading"
+          }
+        ]
+      },
+      {
+        "guard": {
+          "path": "hasError",
+          "is_callable": false
+        },
+        "body": [
+          {
+            "kind": "text",
+            "value": "Error"
+          }
+        ]
+      },
+      {
+        "guard": null,
+        "body": [
+          {
+            "kind": "text",
+            "value": "Ready"
+          }
+        ]
+      }
+    ]
+  }
+}

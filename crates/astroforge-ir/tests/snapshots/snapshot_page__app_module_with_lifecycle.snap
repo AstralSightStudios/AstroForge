@@ -1,0 +1,10 @@
+---
+source: crates/astroforge-ir/tests/snapshot_page.rs
+expression: "AppModule { lifecycle }"
+---
+{
+  "lifecycle": {
+    "onCreate": "console.log('app created');",
+    "onDestroy": "console.log('app destroyed');"
+  }
+}

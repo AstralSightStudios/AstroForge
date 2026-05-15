@@ -1,0 +1,18 @@
+{
+  "name": "astroforge-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "AstroForge — a Rust-powered toolchain for smartwatch quick apps with React-like development.",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build:rust": "cargo build --workspace",
+    "build:rust:release": "cargo build --workspace --release",
+    "test:rust": "cargo test --workspace",
+    "fmt": "cargo fmt --all && pnpm -r exec prettier --write .",
+    "lint": "cargo clippy --workspace --all-targets -- -D warnings"
+  },
+  "devDependencies": {}
+}

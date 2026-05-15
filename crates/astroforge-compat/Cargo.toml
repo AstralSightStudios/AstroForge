@@ -1,0 +1,19 @@
+[package]
+name = "astroforge-compat"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "AstroForge 兼容性测试：与 aiot-toolkit 产物的 AST / 运行时调用对照。"
+
+[dependencies]
+astroforge-ir = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+indexmap = { workspace = true }
+walkdir = { workspace = true }
+camino = { workspace = true }
+tracing = { workspace = true }

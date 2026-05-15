@@ -1,0 +1,17 @@
+---
+source: crates/astroforge-ir/tests/snapshot_component.rs
+expression: node
+---
+{
+  "kind": "fragment",
+  "value": [
+    {
+      "kind": "text",
+      "value": "A"
+    },
+    {
+      "kind": "text",
+      "value": "B"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+---
+source: crates/astroforge-ir/tests/snapshot_page.rs
+expression: page
+---
+{
+  "route": "pages/index",
+  "imports": {
+    "avatar-card": "avatar-card"
+  },
+  "template": [
+    {
+      "kind": "element",
+      "value": {
+        "tag": "div",
+        "is_component": false,
+        "attrs": {},
+        "events": {},
+        "children": []
+      }
+    }
+  ],
+  "script": {
+    "props": {},
+    "private_data": {},
+    "methods": {},
+    "lifecycle": {}
+  },
+  "style": {
+    "rules": []
+  }
+}

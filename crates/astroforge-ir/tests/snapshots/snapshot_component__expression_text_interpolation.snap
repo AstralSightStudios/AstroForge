@@ -1,0 +1,11 @@
+---
+source: crates/astroforge-ir/tests/snapshot_component.rs
+expression: node
+---
+{
+  "kind": "expression",
+  "value": {
+    "path": "message",
+    "is_callable": false
+  }
+}

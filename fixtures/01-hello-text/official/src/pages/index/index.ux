@@ -1,0 +1,12 @@
+<template>
+  <div>
+    <text>Hello, Vela!</text>
+  </div>
+</template>
+
+<script>
+export default {}
+</script>
+
+<style>
+</style>

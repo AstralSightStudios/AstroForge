@@ -1,0 +1,24 @@
+---
+source: crates/astroforge-ir/tests/snapshot_page.rs
+expression: style
+---
+{
+  "rules": [
+    {
+      "selectors": [
+        {
+          "kind": "class",
+          "name": "demo-page"
+        },
+        {
+          "kind": "class",
+          "name": "alt-page"
+        }
+      ],
+      "declarations": {
+        "flex-direction": "column",
+        "align-items": "center"
+      }
+    }
+  ]
+}

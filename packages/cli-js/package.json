@@ -1,0 +1,15 @@
+{
+  "name": "astroforge",
+  "version": "0.0.1",
+  "description": "AstroForge CLI 的 Node 端薄封装，转发到 Rust 实现。",
+  "license": "ISC",
+  "type": "module",
+  "bin": {
+    "astroforge": "./bin/astroforge.js"
+  },
+  "main": "./src/index.ts",
+  "files": [
+    "src",
+    "bin"
+  ]
+}

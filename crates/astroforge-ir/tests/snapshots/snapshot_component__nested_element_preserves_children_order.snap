@@ -1,0 +1,45 @@
+---
+source: crates/astroforge-ir/tests/snapshot_component.rs
+expression: node
+---
+{
+  "kind": "element",
+  "value": {
+    "tag": "div",
+    "is_component": false,
+    "attrs": {},
+    "events": {},
+    "children": [
+      {
+        "kind": "element",
+        "value": {
+          "tag": "AvatarCard",
+          "is_component": true,
+          "attrs": {
+            "name": {
+              "kind": "static",
+              "value": "张伟"
+            }
+          },
+          "events": {},
+          "children": []
+        }
+      },
+      {
+        "kind": "element",
+        "value": {
+          "tag": "AvatarCard",
+          "is_component": true,
+          "attrs": {
+            "name": {
+              "kind": "static",
+              "value": "李娜"
+            }
+          },
+          "events": {},
+          "children": []
+        }
+      }
+    ]
+  }
+}

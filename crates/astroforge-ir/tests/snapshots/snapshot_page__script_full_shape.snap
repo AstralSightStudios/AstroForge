@@ -1,0 +1,25 @@
+---
+source: crates/astroforge-ir/tests/snapshot_page.rs
+expression: script
+---
+{
+  "props": {
+    "name": {
+      "type": "String",
+      "default": "用户"
+    },
+    "active": {
+      "type": "Boolean",
+      "default": false
+    }
+  },
+  "private_data": {
+    "message": "点击联系人查看信息"
+  },
+  "methods": {
+    "onCardTap": "function(evt) { this.message = evt.detail.name }"
+  },
+  "lifecycle": {
+    "onInit": "function() {}"
+  }
+}

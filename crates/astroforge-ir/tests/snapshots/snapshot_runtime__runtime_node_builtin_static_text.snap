@@ -1,0 +1,15 @@
+---
+source: crates/astroforge-ir/tests/snapshot_runtime.rs
+expression: node
+---
+{
+  "creator": "builtin",
+  "tag": "text",
+  "opts": {
+    "value": {
+      "kind": "static",
+      "value": "Hello, Vela!"
+    }
+  },
+  "children": []
+}

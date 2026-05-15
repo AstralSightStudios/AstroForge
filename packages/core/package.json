@@ -1,0 +1,18 @@
+{
+  "name": "@astroforge/core",
+  "version": "0.0.1",
+  "description": "AstroForge 用户侧核心：JSX runtime、内置组件、hooks。",
+  "license": "ISC",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-runtime.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "peerDependencies": {},
+  "dependencies": {}
+}

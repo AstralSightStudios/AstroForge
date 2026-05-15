@@ -1,0 +1,11 @@
+{
+  "name": "@astroforge/runtime-vela",
+  "version": "0.0.1",
+  "description": "AstroForge Vela 设备端运行时垫片：__ce__ / __cc__ / 响应式调度等胶水代码。",
+  "license": "ISC",
+  "type": "module",
+  "main": "./src/index.ts",
+  "files": [
+    "src"
+  ]
+}

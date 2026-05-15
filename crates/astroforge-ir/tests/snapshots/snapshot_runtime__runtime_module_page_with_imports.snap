@@ -1,0 +1,26 @@
+---
+source: crates/astroforge-ir/tests/snapshot_runtime.rs
+expression: module
+---
+{
+  "kind": "page",
+  "value": {
+    "create_handler": "createPageHandler",
+    "script_body": "{}",
+    "template_root": {
+      "creator": "builtin",
+      "tag": "text",
+      "opts": {
+        "value": {
+          "kind": "static",
+          "value": "Hello"
+        }
+      },
+      "children": []
+    },
+    "style_table": [],
+    "component_imports": {
+      "avatar-card": "./src/components/avatar-card.ux"
+    }
+  }
+}

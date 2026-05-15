@@ -1,0 +1,12 @@
+{
+  "name": "@astroforge/rsbuild-plugin",
+  "version": "0.0.1",
+  "description": "AstroForge 的 Rsbuild 插件：采集页面、转换 TSX、生成 IR、调用 Rust 后端。",
+  "license": "ISC",
+  "type": "module",
+  "main": "./src/index.ts",
+  "peerDependencies": {
+    "@rsbuild/core": ">=1.0.0"
+  },
+  "dependencies": {}
+}

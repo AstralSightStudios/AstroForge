@@ -1,0 +1,16 @@
+{
+  "name": "fixture-01-hello-text-official",
+  "version": "0.0.1",
+  "private": true,
+  "description": "fixture 01 的官方 aiot-toolkit 实现，用于对照测试。",
+  "engines": {
+    "node": ">=18.18"
+  },
+  "scripts": {
+    "build": "aiot build",
+    "release": "aiot release"
+  },
+  "devDependencies": {
+    "aiot-toolkit": "^2.0.5"
+  }
+}

@@ -1,0 +1,18 @@
+---
+source: crates/astroforge-ir/tests/snapshot_runtime.rs
+expression: module
+---
+{
+  "kind": "component",
+  "value": {
+    "name": "avatar-card",
+    "script_body": "{ props: { name: { type: String, default: '用户' } } }",
+    "template_root": {
+      "creator": "builtin",
+      "tag": "div",
+      "opts": {},
+      "children": []
+    },
+    "style_table": []
+  }
+}

@@ -1,0 +1,7 @@
+---
+source: crates/astroforge-ir/tests/snapshot_runtime.rs
+expression: "EventHandler { method: \"handleClick\".into(), }"
+---
+{
+  "method": "handleClick"
+}

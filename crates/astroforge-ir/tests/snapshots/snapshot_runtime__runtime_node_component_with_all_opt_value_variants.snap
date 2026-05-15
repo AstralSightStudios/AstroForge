@@ -1,0 +1,42 @@
+---
+source: crates/astroforge-ir/tests/snapshot_runtime.rs
+expression: node
+---
+{
+  "creator": "component",
+  "tag": "avatar-card",
+  "opts": {
+    "classList": {
+      "kind": "class_list",
+      "value": [
+        "avatar-card",
+        "active"
+      ]
+    },
+    "name": {
+      "kind": "static",
+      "value": "张伟"
+    },
+    "title": {
+      "kind": "dynamic",
+      "value": {
+        "expr": "_vm_.title"
+      }
+    },
+    "style": {
+      "kind": "dynamic_style",
+      "value": {
+        "expr": "__webpack_require__.g.$translateStyle$(\"background-color: \" + _vm_.color)"
+      }
+    },
+    "events": {
+      "kind": "events",
+      "value": {
+        "cardtap": {
+          "method": "onCardTap"
+        }
+      }
+    }
+  },
+  "children": []
+}
