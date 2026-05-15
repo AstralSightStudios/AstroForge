@@ -1,8 +1,8 @@
 {
-  "name": "fixture-01-hello-text-astroforge",
+  "name": "fixture-04-click-event-astroforge",
   "version": "0.0.1",
   "private": true,
-  "description": "fixture 01 的 AstroForge 实现，用于对照测试。",
+  "description": "fixture 04 的 AstroForge 实现，用于对照测试。",
   "type": "module",
   "scripts": {
     "build": "astroforge build --target vela",

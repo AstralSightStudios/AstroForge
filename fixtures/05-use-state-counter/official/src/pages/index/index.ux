@@ -1,0 +1,23 @@
+<template>
+  <div>
+    <text>{{count}}</text>
+    <div onclick="increment">
+      <text>Increment</text>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  private: {
+    count: 0
+  },
+
+  increment() {
+    this.count = this.count + 1
+  }
+}
+</script>
+
+<style>
+</style>

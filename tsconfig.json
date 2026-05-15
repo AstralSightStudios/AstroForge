@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@astroforge/core",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "types": ["node", "vitest"]
+  },
+  "include": [
+    "packages/**/*.ts",
+    "fixtures/*/astroforge/**/*.ts",
+    "fixtures/*/astroforge/**/*.tsx"
+  ]
+}

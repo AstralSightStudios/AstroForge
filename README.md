@@ -13,3 +13,20 @@
 - 经由稳定的三层 **IR**（Component → Page → Runtime）下沉。
 - 输出**与厂商运行时 ABI 等价**的 JS 产物，在运行时调用层面与官方工具链产
   物不可区分。
+
+## 当前状态
+
+- Phase 0：Vela 运行时 ABI 研究骨架与 aiot-toolkit 源码缓存已建立。
+- Phase 1：Rust 侧 IR、schema、I/O、diff 基础设施已落地。
+- Phase 2：`@astroforge/rsbuild-plugin` 已能从静态文本、点击事件、
+  `useState` counter、条件渲染、列表渲染和生命周期 fixtures 的 TSX 页面生成
+  符合 `docs/ir-document.schema.json` 的 IR 文件。
+
+常用验证命令：
+
+```bash
+pnpm check:js
+pnpm test:js
+cargo test --workspace
+pnpm --dir fixtures/01-hello-text/astroforge exec rsbuild build
+```

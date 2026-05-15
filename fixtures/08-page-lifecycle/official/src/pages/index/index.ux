@@ -1,0 +1,24 @@
+<template>
+  <div>
+    <text>{{message}}</text>
+  </div>
+</template>
+
+<script>
+export default {
+  private: {
+    message: 'Ready'
+  },
+
+  onInit() {
+    console.log('page init')
+  },
+
+  onReady() {
+    console.log('page ready')
+  }
+}
+</script>
+
+<style>
+</style>

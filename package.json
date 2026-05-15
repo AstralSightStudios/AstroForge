@@ -10,9 +10,20 @@
   "scripts": {
     "build:rust": "cargo build --workspace",
     "build:rust:release": "cargo build --workspace --release",
+    "check:js": "tsc --noEmit",
+    "test": "pnpm test:rust && pnpm test:js",
+    "test:js": "vitest run",
     "test:rust": "cargo test --workspace",
     "fmt": "cargo fmt --all && pnpm -r exec prettier --write .",
     "lint": "cargo clippy --workspace --all-targets -- -D warnings"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@rsbuild/core": "^2.0.6",
+    "@types/node": "^20.19.41",
+    "ajv": "^8.20.0",
+    "prettier": "^3.8.3",
+    "tsx": "^4.22.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  }
 }

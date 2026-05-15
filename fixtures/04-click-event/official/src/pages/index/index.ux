@@ -1,0 +1,16 @@
+<template>
+  <div onclick="handleClick">
+    <text>Tap me</text>
+  </div>
+</template>
+
+<script>
+export default {
+  handleClick(evt) {
+    console.log('tap', evt)
+  }
+}
+</script>
+
+<style>
+</style>

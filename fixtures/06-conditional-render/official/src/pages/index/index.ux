@@ -1,0 +1,17 @@
+<template>
+  <div>
+    <text if="{{isReady}}">Ready</text>
+    <text else>Loading</text>
+  </div>
+</template>
+
+<script>
+export default {
+  private: {
+    isReady: true
+  }
+}
+</script>
+
+<style>
+</style>

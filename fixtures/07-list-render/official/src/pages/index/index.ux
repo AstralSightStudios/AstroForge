@@ -1,0 +1,22 @@
+<template>
+  <div>
+    <div for="{{items}}" for-item="item" for-index="idx" tid="{{item.id}}">
+      <text>{{item.name}}</text>
+      <text>{{idx}}</text>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  private: {
+    items: [
+      { id: 'ada', name: 'Ada' },
+      { id: 'grace', name: 'Grace' }
+    ]
+  }
+}
+</script>
+
+<style>
+</style>

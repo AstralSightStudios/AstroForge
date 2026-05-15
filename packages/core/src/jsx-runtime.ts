@@ -13,6 +13,10 @@ export type FC<P = {}> = (props: P) => unknown;
 export type PropsWithChildren<P = {}> = P & { children?: unknown };
 
 export namespace JSX {
+  export interface IntrinsicAttributes {
+    key?: unknown;
+  }
+
   export interface IntrinsicElements {
     // 内置元素的占位声明。Phase 2 落地具体属性类型。
     [tag: string]: Record<string, unknown>;
@@ -21,7 +25,7 @@ export namespace JSX {
 }
 
 const NOT_REACHABLE =
-  'AstroForge: jsx 运行时不应被执行。请确认已启用 @astroforge/rsbuild-plugin。';
+  "AstroForge: jsx 运行时不应被执行。请确认已启用 @astroforge/rsbuild-plugin。";
 
 export function jsx(_type: unknown, _props: unknown, _key?: unknown): never {
   throw new Error(NOT_REACHABLE);
@@ -31,4 +35,4 @@ export function jsxs(_type: unknown, _props: unknown, _key?: unknown): never {
   throw new Error(NOT_REACHABLE);
 }
 
-export const Fragment: unique symbol = Symbol('astroforge.Fragment');
+export const Fragment: unique symbol = Symbol("astroforge.Fragment");
