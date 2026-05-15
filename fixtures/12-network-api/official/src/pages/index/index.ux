@@ -1,0 +1,11 @@
+<template><div onclick="load"><text>Load</text></div></template>
+<script>
+import network from '@system.fetch'
+
+export default {
+  load() {
+    network.fetch({ url: 'https://example.com/api', method: 'GET' })
+  }
+}
+</script>
+<style></style>

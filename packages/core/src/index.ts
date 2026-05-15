@@ -1,8 +1,8 @@
-// AstroForge 用户侧入口：导出内置组件、hooks 与 JSX runtime 类型。
+// AstroForge 应用源码侧公开 API。
 //
-// 当前为骨架，Phase 2 起逐步落地。所有运行时实现实际由产物中的
-// `@astroforge/runtime-vela` 提供；本包仅暴露开发期 TS 类型与 JSX 语法糖。
+// 本包导出 TypeScript 声明与编译期标记。目标运行时行为由后端包根据 IR 生成。
 
-export { View, Text, Image } from './components';
-export { useState, useEffect, useRef, useMemo, useCallback } from './hooks';
-export type { JSX } from './jsx-runtime';
+export { View, Text, Image } from "./components";
+export { useState, useEffect, useRef, useMemo, useCallback } from "./hooks";
+export { router, storage, network } from "./apis";
+export type { JSX } from "./jsx-runtime";

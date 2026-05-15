@@ -2,6 +2,7 @@ import { parse } from "@babel/parser";
 import type {
   Attr,
   Binding,
+  Component,
   Element,
   JsonValue,
   Node,
@@ -10,6 +11,7 @@ import type {
   AppModule,
 } from "./ir";
 import { createEmptyScript, createEmptyStyleTable } from "./ir";
+import { parseStyleTable } from "./style";
 
 const BUILTIN_COMPONENTS = new Map<string, string>([
   ["View", "div"],
@@ -27,6 +29,11 @@ interface PageFunction {
   renderExpression: any;
 }
 
+export interface ExtractPageModuleResult {
+  page: Page;
+  components: Record<string, Component>;
+}
+
 interface ScriptContext {
   source: string;
   filename?: string;
@@ -38,6 +45,13 @@ export function extractPageFromTsx(
   source: string,
   options: ExtractPageOptions,
 ): Page {
+  return extractPageModuleFromTsx(source, options).page;
+}
+
+export function extractPageModuleFromTsx(
+  source: string,
+  options: ExtractPageOptions,
+): ExtractPageModuleResult {
   const ast = parse(source, {
     sourceType: "module",
     plugins: ["typescript", "jsx"],
@@ -59,14 +73,24 @@ export function extractPageFromTsx(
     bindings,
     options.filename,
   );
+  const components = extractLocalComponents(
+    source,
+    ast.program.body,
+    pageFunction.node,
+    bindings,
+    options.filename,
+  );
+  const imports = importsFromTemplate(template, components);
 
-  return {
+  const page = {
     route: options.route,
-    imports: {},
+    imports,
     template,
     script,
-    style: createEmptyStyleTable(),
+    style: extractStyleTable(source, ast.program.body, options.filename),
   };
+
+  return { page, components };
 }
 
 export function extractAppFromTsx(
@@ -130,6 +154,138 @@ function collectAstroForgeImports(body: any[]): Map<string, string> {
   }
 
   return bindings;
+}
+
+function extractLocalComponents(
+  source: string,
+  body: any[],
+  pageFunction: any,
+  bindings: Map<string, string>,
+  filename?: string,
+): Record<string, Component> {
+  const components: Record<string, Component> = {};
+  for (const statement of body) {
+    const candidate = componentCandidate(statement);
+    if (
+      !candidate ||
+      candidate.node === pageFunction ||
+      !isPascalCase(candidate.name)
+    ) {
+      continue;
+    }
+
+    const fn = unwrapExpression(candidate.node);
+    if (!isFunctionLike(fn)) {
+      continue;
+    }
+
+    const name = kebabCase(candidate.name);
+    components[name] = {
+      name,
+      template: templateFromRenderExpression(
+        renderExpressionFromFunction(fn, filename),
+        bindings,
+        filename,
+      ),
+      script: createEmptyScript(),
+      style: createEmptyStyleTable(),
+    };
+  }
+  return components;
+}
+
+function componentCandidate(
+  statement: any,
+): { name: string; node: any } | undefined {
+  if (statement.type === "FunctionDeclaration" && statement.id?.name) {
+    return { name: statement.id.name, node: statement };
+  }
+
+  if (statement.type !== "VariableDeclaration") {
+    return undefined;
+  }
+
+  for (const declarator of statement.declarations) {
+    if (declarator.id.type === "Identifier" && declarator.init) {
+      return {
+        name: declarator.id.name,
+        node: unwrapExpression(declarator.init),
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function importsFromTemplate(
+  template: Node[],
+  components: Record<string, Component>,
+): Record<string, string> {
+  const imports: Record<string, string> = {};
+  collectTemplateImports(template, components, imports);
+  return imports;
+}
+
+function collectTemplateImports(
+  nodes: Node[],
+  components: Record<string, Component>,
+  imports: Record<string, string>,
+) {
+  for (const node of nodes) {
+    switch (node.kind) {
+      case "element":
+        if (node.value.is_component && components[node.value.tag]) {
+          imports[node.value.tag] = node.value.tag;
+        }
+        collectTemplateImports(node.value.children, components, imports);
+        break;
+      case "conditional":
+        for (const branch of node.value.branches) {
+          collectTemplateImports(branch.body, components, imports);
+        }
+        break;
+      case "list":
+        collectTemplateImports(node.value.body, components, imports);
+        break;
+      case "fragment":
+        collectTemplateImports(node.value, components, imports);
+        break;
+    }
+  }
+}
+
+function extractStyleTable(source: string, body: any[], filename?: string) {
+  for (const statement of body) {
+    if (
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.declaration?.type !== "VariableDeclaration"
+    ) {
+      continue;
+    }
+
+    for (const declarator of statement.declaration.declarations) {
+      if (
+        declarator.id.type !== "Identifier" ||
+        !["style", "styles"].includes(declarator.id.name) ||
+        !declarator.init
+      ) {
+        continue;
+      }
+
+      const init = unwrapExpression(declarator.init);
+      if (init.type === "StringLiteral") {
+        return parseStyleTable(init.value);
+      }
+      if (init.type === "TemplateLiteral" && init.expressions.length === 0) {
+        return parseStyleTable(
+          init.quasis.map((quasi: any) => quasi.value.cooked).join(""),
+        );
+      }
+      throw new Error(`${filename ?? "TSX"}: styles 必须是静态字符串`);
+    }
+  }
+
+  return createEmptyStyleTable();
 }
 
 function findDefaultPageFunction(body: any[], filename?: string): PageFunction {
@@ -1116,6 +1272,10 @@ function isFunctionLike(node: any): boolean {
     node.type === "ArrowFunctionExpression" ||
     node.type === "ObjectMethod"
   );
+}
+
+function isPascalCase(value: string): boolean {
+  return /^[A-Z]/.test(value);
 }
 
 function isJsxNode(node: any): boolean {

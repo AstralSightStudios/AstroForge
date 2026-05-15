@@ -1,0 +1,6 @@
+<template><div><contact-card name="Ada" oncardtap="handleCardTap"></contact-card></div></template>
+<import name="contact-card" src="../../components/contact-card.ux"></import>
+<script>
+export default { handleCardTap(evt) { console.log(evt) } }
+</script>
+<style></style>

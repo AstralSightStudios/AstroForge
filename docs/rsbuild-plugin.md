@@ -20,6 +20,9 @@
   节点，并把 JSX `key` 记录到 `List.key`。
 - 将页面模块导出的 `lifecycle` 对象写入 Page IR 的 `script.lifecycle`。
 - 将 `src/app.tsx` 的 default export 对象方法写入 IR 根节点的 `app.lifecycle`。
+- 提取同一页面模块内的 PascalCase 本地组件，并在 Page IR 中记录组件导入关系。
+- 提取页面模块导出的静态 `style` / `styles` 字符串，转换为 Style IR。
+- 收集静态 `Image.src` 指向的项目内资源，并写入 IR 根节点的 `assets`。
 - 在 Rsbuild `onBeforeBuild` / `onBeforeDevCompile` 阶段写出
   `node_modules/.cache/astroforge/ir-document.json`。
 - 通过 `modifyRsbuildConfig` 设置 Rsbuild entry，并配置 SWC automatic JSX
@@ -79,6 +82,9 @@ Phase 2 的 TSX 提取器以稳定 IR 为目标，当前只接受可直接映射
 - 列表渲染当前只支持直接的 `.map(...)` 调用，item / index 参数必须是标识符；
 - 页面生命周期必须通过 `export const lifecycle = { ... }` 声明；
 - 应用生命周期必须通过 `src/app.tsx` 的 default export 对象方法声明；
+- 页面静态样式必须通过 `export const style = "..."` 或
+  `export const styles = "..."` 声明，不执行运行时代码；
+- 本地组件必须使用 PascalCase 顶层函数或函数变量声明；
 - 组件命名空间（`<Foo.Bar />`）暂不支持。
 
 这些限制用于保证前端阶段输出的 IR 可预测，后续扩展应以 fixture 和 schema
@@ -86,12 +92,21 @@ Phase 2 的 TSX 提取器以稳定 IR 为目标，当前只接受可直接映射
 
 ## 已覆盖 fixtures
 
-| fixture                 | 覆盖点                                     |
-| ----------------------- | ------------------------------------------ |
-| `01-hello-text`         | 静态文本和最小 manifest / route 生成       |
-| `04-click-event`        | `onClick` 事件绑定与页面方法提取           |
-| `05-use-state-counter`  | `useState` 初值、文本绑定、setter lowering |
-| `06-conditional-render` | 三元表达式条件渲染                         |
-| `07-list-render`        | `.map(...)` 列表渲染、item / index / key   |
-| `08-page-lifecycle`     | 页面 lifecycle 导出                        |
-| `09-app-lifecycle`      | 应用 lifecycle 导出                        |
+| fixture                  | 覆盖点                                     |
+| ------------------------ | ------------------------------------------ |
+| `01-hello-text`          | 静态文本和最小 manifest / route 生成       |
+| `04-click-event`         | `onClick` 事件绑定与页面方法提取           |
+| `05-use-state-counter`   | `useState` 初值、文本绑定、setter lowering |
+| `06-conditional-render`  | 三元表达式条件渲染                         |
+| `07-list-render`         | `.map(...)` 列表渲染、item / index / key   |
+| `08-page-lifecycle`      | 页面 lifecycle 导出                        |
+| `09-app-lifecycle`       | 应用 lifecycle 导出                        |
+| `10-navigation`          | 路由 bridge 调用、多页面路由表             |
+| `11-storage-api`         | storage bridge 调用与 feature 声明         |
+| `12-network-api`         | network bridge 调用与 feature 声明         |
+| `13-timer`               | timer 调用保留                             |
+| `14-nested-component`    | 本地组件提取、组件导入、组件事件绑定       |
+| `15-multi-page`          | 多页面发现、入口排序、Rsbuild entries      |
+| `16-permission-manifest` | manifest features 透传                     |
+| `17-resource-path`       | 静态图片资源收集、资源 digest              |
+| `18-css-edge-cases`      | 静态 CSS 解析、复合覆盖选择器、at-rule     |

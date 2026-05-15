@@ -6,14 +6,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { collectAssets } from "./assets";
 import type {
   AstroForgeManifestInput,
   AstroForgeProjectConfig,
 } from "./config";
 import { readAstroForgeConfig } from "./config";
-import type { AppModule, IrDocument, Manifest, Page, RoutePage } from "./ir";
+import type { AppModule, IrDocument, Manifest, RoutePage } from "./ir";
 import { IR_VERSION } from "./ir";
-import { extractAppFromTsx, extractPageFromTsx } from "./tsx";
+import { extractAppFromTsx, extractPageModuleFromTsx } from "./tsx";
 
 export interface CompileProjectOptions {
   root: string;
@@ -52,11 +53,16 @@ export function compileAstroForgeProject(
   document.app = extractAppModule(root);
   for (const page of pages) {
     const source = readFileSync(page.file, "utf8");
-    document.pages[page.route] = extractPageFromTsx(source, {
+    const module = extractPageModuleFromTsx(source, {
       route: page.route,
       filename: page.file,
     });
+    document.pages[page.route] = module.page;
+    for (const [name, component] of Object.entries(module.components)) {
+      document.components[name] = component;
+    }
   }
+  document.assets = collectAssets(root, document);
 
   const outFile = options.outFile ?? defaultIrOutFile(root, options.cacheDir);
   writeIrDocument(outFile, document);
@@ -79,11 +85,11 @@ function extractAppModule(root: string): AppModule {
 
 export function discoverPages(root: string): PageModule[] {
   const pagesRoot = resolve(root, "src", "pages");
-  const files = walkFiles(pagesRoot)
+  const pages = walkFiles(pagesRoot)
     .filter((file) => PAGE_EXTENSIONS.has(extname(file)))
-    .sort((a, b) => a.localeCompare(b));
+    .map((file) => pageModuleFromFile(root, file));
 
-  return files.map((file) => pageModuleFromFile(root, file));
+  return pages.sort((a, b) => compareRoutes(a.route, b.route));
 }
 
 export function createRsbuildEntries(root: string): Record<string, string> {
@@ -189,6 +195,16 @@ function stripExtension(path: string): string {
 
 function entryNameFromRoute(route: string): string {
   return route.replace(/\//g, "_");
+}
+
+function compareRoutes(a: string, b: string): number {
+  if (a === "pages/index") {
+    return -1;
+  }
+  if (b === "pages/index") {
+    return 1;
+  }
+  return a.localeCompare(b);
 }
 
 function toPosix(path: string): string {

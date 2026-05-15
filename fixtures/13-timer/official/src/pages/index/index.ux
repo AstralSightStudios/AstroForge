@@ -1,0 +1,5 @@
+<template><div onclick="startTimer"><text>Start timer</text></div></template>
+<script>
+export default { startTimer() { setTimeout(() => { console.log('timer fired') }, 1000) } }
+</script>
+<style></style>

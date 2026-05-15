@@ -1,0 +1,11 @@
+<template><div onclick="goDetail"><text>Open detail</text></div></template>
+<script>
+import router from '@system.router'
+
+export default {
+  goDetail() {
+    router.push({ uri: 'pages/detail' })
+  }
+}
+</script>
+<style></style>

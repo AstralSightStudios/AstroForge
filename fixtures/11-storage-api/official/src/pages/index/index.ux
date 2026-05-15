@@ -1,0 +1,11 @@
+<template><div onclick="saveToken"><text>Save</text></div></template>
+<script>
+import storage from '@system.storage'
+
+export default {
+  saveToken() {
+    storage.set({ key: 'token', value: 'ready' })
+  }
+}
+</script>
+<style></style>

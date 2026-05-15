@@ -1,0 +1,12 @@
+{
+  "name": "fixture-18-css-edge-cases-official",
+  "version": "0.0.1",
+  "private": true,
+  "description": "fixture 18 的官方 UX 源码。",
+  "scripts": {
+    "build": "aiot build"
+  },
+  "devDependencies": {
+    "aiot-toolkit": "^1.0.3"
+  }
+}

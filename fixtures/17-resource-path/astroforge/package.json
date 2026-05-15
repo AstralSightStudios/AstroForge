@@ -1,0 +1,19 @@
+{
+  "name": "fixture-17-resource-path-astroforge",
+  "version": "0.0.1",
+  "private": true,
+  "description": "fixture 17 的 AstroForge 实现。",
+  "type": "module",
+  "scripts": {
+    "build": "astroforge build --target vela",
+    "dev": "astroforge dev"
+  },
+  "dependencies": {
+    "@astroforge/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.0.6",
+    "@astroforge/rsbuild-plugin": "workspace:*",
+    "astroforge": "workspace:*"
+  }
+}

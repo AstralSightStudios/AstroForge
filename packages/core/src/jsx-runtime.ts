@@ -1,13 +1,7 @@
-// JSX runtime 类型与运行期占位。
+// Rsbuild 自动 JSX 转换使用的 JSX runtime 声明。
 //
-// 用户的 .tsx 在 Rsbuild 中以 `automatic` JSX transform 编译，jsxImportSource
-// 指向 `@astroforge/core`。Rsbuild 会调用本文件导出的 `jsx` / `jsxs` / Fragment。
-// 这些调用在 AstroForge 流水线中并不会执行——@astroforge/rsbuild-plugin 在
-// 转换阶段直接抽取 JSX 树并构建 IR，最终产物由 Rust 后端生成。
-//
-// 保留这些导出是为了：
-// 1) 让 IDE 与 tsc 在用户源码上类型检查正确；
-// 2) 在不启用插件的情况下给出明确的运行期错误。
+// AstroForge 在这些函数执行前消费 TSX 源码。保留这些导出是为了让 TypeScript、
+// 编辑器以及误配置的运行路径获得确定行为。
 
 export type FC<P = {}> = (props: P) => unknown;
 export type PropsWithChildren<P = {}> = P & { children?: unknown };
@@ -18,7 +12,7 @@ export namespace JSX {
   }
 
   export interface IntrinsicElements {
-    // 内置元素的占位声明。Phase 2 落地具体属性类型。
+    // 接受任意 intrinsic element，以兼容 JSX 转换器和类型检查流程。
     [tag: string]: Record<string, unknown>;
   }
   export type Element = unknown;

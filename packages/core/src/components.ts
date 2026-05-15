@@ -1,10 +1,9 @@
-// 内置组件占位声明。
+// AstroForge 源码侧内置组件声明。
 //
-// 这些"组件"在运行时不存在为 React 组件——AstroForge 编译器在 IR 阶段识别这
-// 些标识符并下沉为 Vela 运行时的内置标签（`div` / `text` / `image`）。本文件
-// 仅提供 TS 类型与导出，便于用户在 TSX 中以 JSX 语法书写。
+// 这些导出仅作为类型声明与编译期标记使用。前端转换会将其解析为 Component IR
+// 标签，目标后端负责生成对应快应用运行时代码。
 
-import type { FC, PropsWithChildren } from './jsx-runtime';
+import type { FC, PropsWithChildren } from "./jsx-runtime";
 
 export interface ViewProps extends PropsWithChildren {
   className?: string;
@@ -14,7 +13,7 @@ export interface ViewProps extends PropsWithChildren {
 
 export const View: FC<ViewProps> = () => {
   throw new Error(
-    'AstroForge: <View> 在运行时不应被实际调用。请确认已启用 @astroforge/rsbuild-plugin。',
+    "AstroForge: <View> 在运行时不应被实际调用。请确认已启用 @astroforge/rsbuild-plugin。",
   );
 };
 
@@ -26,7 +25,7 @@ export interface TextProps extends PropsWithChildren {
 
 export const Text: FC<TextProps> = () => {
   throw new Error(
-    'AstroForge: <Text> 在运行时不应被实际调用。请确认已启用 @astroforge/rsbuild-plugin。',
+    "AstroForge: <Text> 在运行时不应被实际调用。请确认已启用 @astroforge/rsbuild-plugin。",
   );
 };
 
@@ -39,6 +38,6 @@ export interface ImageProps {
 
 export const Image: FC<ImageProps> = () => {
   throw new Error(
-    'AstroForge: <Image> 在运行时不应被实际调用。请确认已启用 @astroforge/rsbuild-plugin。',
+    "AstroForge: <Image> 在运行时不应被实际调用。请确认已启用 @astroforge/rsbuild-plugin。",
   );
 };

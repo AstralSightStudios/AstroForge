@@ -13,7 +13,7 @@
 pub mod emit;
 pub mod lower;
 
-/// 后端入口。当前为占位，待 Phase 3 实现。
+/// 执行 Vela 后端构建，生成打包器可消费的文件集合。
 pub fn build(_ir: astroforge_ir::page::IrDocument) -> anyhow::Result<VelaBuildOutput> {
     anyhow::bail!("astroforge-vela: 尚未实现")
 }

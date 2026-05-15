@@ -1,0 +1,21 @@
+<template><div class="card"><text>Styled</text></div></template>
+<script>export default {}</script>
+<style>
+  .card, #primary {
+    width: 192px;
+    color: #ffffff;
+  }
+
+  text {
+    font-size: 24px;
+  }
+
+  @font-face {
+    font-family: AstroForgeFixture;
+    src: url("/common/fixture.woff");
+  }
+
+  @keyframes pulse {
+    opacity: 1;
+  }
+</style>
