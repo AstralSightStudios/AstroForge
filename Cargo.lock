@@ -84,7 +84,7 @@ dependencies = [
 
 [[package]]
 name = "astroforge-cli"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "astroforge-compat",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "astroforge-compat"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "astroforge-ir",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "astroforge-compiler"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "astroforge-ir",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "astroforge-device"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "camino",
@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "astroforge-ir"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "camino",
  "indexmap 2.14.0",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "astroforge-packager"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "astroforge-ir",
@@ -183,7 +183,7 @@ dependencies = [
 
 [[package]]
 name = "astroforge-vela"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "astroforge-ir",
