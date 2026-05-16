@@ -85,8 +85,10 @@ if [[ "$NO_COMMIT" == "true" ]]; then
   exit 0
 fi
 
-echo "→ git add 7 个 package.json"
+echo "→ git add CLI package.json + Cargo.toml"
 # sync-cli-version.mjs 写过的具体路径；wrapper 在 cli-js，平台子包在 cli-*-* 下。
+git add Cargo.toml
+git add Cargo.lock
 git add packages/cli-js/package.json
 git add packages/cli-darwin-arm64/package.json
 git add packages/cli-darwin-x64/package.json
