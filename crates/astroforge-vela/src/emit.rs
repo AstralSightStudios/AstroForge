@@ -40,13 +40,13 @@ pub fn emit_build_output(ir: &IrDocument, lowered: LoweredDocument) -> Result<Ve
 }
 
 fn emit_app_js(manifest_json: &str, script_object: &str) -> String {
+    let compact_manifest = compact_json_text(manifest_json);
     let body = format!(
-        r#"var __webpack_require__ = createRequire({{
+        r#"var __webpack_require__ = __af_g.__af_createRequire({{
   "./src/manifest.json": function(module) {{
     module.exports = JSON.parse({manifest});
   }}
 }});
-installTranslateStyle(__webpack_require__.g);
 
 var $app_style$ = [];
 var $app_script$ = function __scriptModule__(module, exports, $app_require$) {{
@@ -59,10 +59,19 @@ $app_exports$.default.style = $app_style$;
 $app_exports$.default.manifest = __webpack_require__("./src/manifest.json");
 return $app_exports$.default;
 "#,
-        manifest = js_string(manifest_json),
+        manifest = js_string(&compact_manifest),
         script = script_object,
     );
-    wrap_module("createAppHandler", &body)
+    wrap_module("createAppHandler", &body, ModuleKind::App)
+}
+
+/// 把 pretty JSON 字符串重新解析为紧凑形态。
+/// 失败时退化为原文，避免无谓 panic 影响构建。
+fn compact_json_text(pretty: &str) -> String {
+    match serde_json::from_str::<Value>(pretty) {
+        Ok(value) => serde_json::to_string(&value).unwrap_or_else(|_| pretty.to_owned()),
+        Err(_) => pretty.to_owned(),
+    }
 }
 
 fn emit_page_js(
@@ -85,15 +94,13 @@ fn emit_page_js(
 
     let template = template_expression(&page_ir.template, &TemplateScope::default())?;
     let body = format!(
-        r#"var __webpack_require__ = createRequire({{}});
-var aiot = resolveAiot(global, globalThis, window, __webpack_require__.g);
-{requires}
+        r#"{requires}
 {components}
 var $app_style$ = {style};
 var $app_script$ = function __scriptModule__(module, exports, $app_require$) {{
   Object.defineProperty(exports, "__esModule", {{ value: true }});
   exports.default = {script};
-  normalizeVmModule(exports.default || module.exports);
+  __af_g.__af_normalizeVm(exports.default || module.exports);
 }};
 var $app_template$ = function(vm) {{
   var _vm_ = vm || this;
@@ -113,7 +120,7 @@ return $app_exports$["entry"];
         script = page.script_object,
         template = template,
     );
-    Ok(wrap_module("createPageHandler", &body))
+    Ok(wrap_module("createPageHandler", &body, ModuleKind::Page))
 }
 
 fn emit_component_registration(
@@ -129,7 +136,6 @@ fn emit_component_registration(
   var $app_script$ = function __scriptModule__(module, exports, $app_require$) {{
     Object.defineProperty(exports, "__esModule", {{ value: true }});
     exports.default = {script};
-    normalizeVmModule(exports.default || module.exports);
   }};
   var $app_template$ = function(vm) {{
     var _vm_ = vm || this;
@@ -148,7 +154,26 @@ fn emit_component_registration(
     ))
 }
 
-fn wrap_module(handler_name: &str, body: &str) -> String {
+/// 区分外层壳到底是 app.js 还是 page/组件壳。
+///
+/// - `ModuleKind::App`：完整定义 helper 并挂到 `__af_g`（globalThis），同步
+///   把宿主的 `aiot` 绑到 `__af_g.aiot`。app.js 加载先于任何页面，所以页面
+///   壳可以直接假设这些全局存在。
+/// - `ModuleKind::Page`：只取 `__af_g` 本地引用，不再重复定义 helper、不再
+///   闭包捕获 `aiot`。模板里 `aiot.__ce__(...)` 直接走全局，匹配 aiot 官方
+///   产物形态。
+#[derive(Clone, Copy)]
+enum ModuleKind {
+    App,
+    Page,
+}
+
+fn wrap_module(handler_name: &str, body: &str, kind: ModuleKind) -> String {
+    let runtime_block = match kind {
+        ModuleKind::App => APP_RUNTIME_DEFINITIONS,
+        ModuleKind::Page => PAGE_RUNTIME_BOOTSTRAP,
+    };
+
     format!(
         r#"export default function(global, globalThis, window, $app_exports$, $app_evaluate$) {{
   var org_app_require = typeof $app_require$ === "undefined" ? undefined : $app_require$;
@@ -161,75 +186,7 @@ fn wrap_module(handler_name: &str, body: &str) -> String {
       throw new Error("AstroForge runtime require failed: " + moduleId);
     }};
 
-    function createRequire(modules) {{
-      var cache = {{}};
-      function __webpack_require__(moduleId) {{
-        var cached = cache[moduleId];
-        if (cached !== void 0) return cached.exports;
-        if (!modules[moduleId]) throw new Error("AstroForge module not found: " + moduleId);
-        var module = cache[moduleId] = {{ exports: {{}} }};
-        modules[moduleId](module, module.exports, __webpack_require__);
-        return module.exports;
-      }}
-      __webpack_require__.g = (function() {{
-        if (typeof globalThis === "object") return globalThis;
-        try {{ return this || new Function("return this")(); }}
-        catch (e) {{ if (typeof window === "object") return window; }}
-        return {{}};
-      }})();
-      __webpack_require__.rv = function() {{ return "astroforge"; }};
-      __webpack_require__.ruid = "bundler=astroforge";
-      return __webpack_require__;
-    }}
-
-    function installTranslateStyle(target) {{
-      if (target.$translateStyle$) return;
-      target.$translateStyle$ = function(value) {{
-        if (typeof value !== "string") return value;
-        return Object.fromEntries(value.split(";").filter(function(item) {{
-          return item && item.trim();
-        }}).map(function(item) {{
-          var match = item.match(/([^:]+):(.*)/);
-          if (!match || match.length < 3) return [];
-          return [
-            match[1].trim().replace(/-([a-z])/g, function(_, c) {{ return c.toUpperCase(); }}),
-            match[2].trim()
-          ];
-        }}));
-      }};
-    }}
-
-    function normalizeVmModule(moduleOwn) {{
-      var accessors = ["public", "protected", "private"];
-      if (moduleOwn.data && accessors.some(function(acc) {{ return moduleOwn[acc]; }})) {{
-        throw new Error("页面VM对象中的属性data不可与\"" + accessors.join(",") + "\"同时存在，请使用private替换data名称");
-      }}
-      if (!moduleOwn.data) {{
-        moduleOwn.data = {{}};
-        moduleOwn._descriptor = {{}};
-        accessors.forEach(function(acc) {{
-          var value = moduleOwn[acc];
-          if (typeof value === "object" && value) {{
-            Object.assign(moduleOwn.data, value);
-            for (var name in value) moduleOwn._descriptor[name] = {{ access: acc }};
-          }} else if (typeof value === "function") {{
-            console.warn("页面VM对象中的属性" + acc + "的值不能是函数，请使用对象");
-          }}
-        }});
-      }}
-    }}
-
-    function interopDefault(module) {{
-      return module && module.__esModule ? module.default : module;
-    }}
-
-    function resolveAiot(global, globalThis, window, runtimeGlobal) {{
-      return global && global.aiot ||
-        runtimeGlobal && runtimeGlobal.aiot ||
-        globalThis && globalThis.aiot ||
-        window && window.aiot ||
-        (typeof aiot !== "undefined" ? aiot : undefined);
-    }}
+{runtime_block}
 
     var {handler_name} = function() {{
       return (function() {{
@@ -240,10 +197,106 @@ fn wrap_module(handler_name: &str, body: &str) -> String {
   }})(global, globalThis, window, $app_exports$, $app_evaluate$);
 }}
 "#,
+        runtime_block = runtime_block,
         handler_name = handler_name,
         body = indent_lines(body.trim_end(), 8),
     )
 }
+
+/// app.js 一次性定义的 runtime helper，全部挂到 `__af_g`（globalThis）。
+///
+/// 设计动机：原实现把 helper 内联到每个 page / component 模块里，单页 JS 多出
+/// 约 1.5KB 死载代码，每次页面切换设备端都要重复 parse + bytecode 编译。挪到
+/// app.js 后只 parse 一次；页面壳只取 `__af_g` 引用即可使用。
+///
+/// `__af_g.aiot` 兜底：宿主理论上把 `aiot` 暴露为全局，但部分 Vela 版本仅放在
+/// `global` / `runtimeGlobal` 上。app.js 启动时统一抹平到 `__af_g.aiot`，让
+/// 页面模板能直接以 bare global 形式访问 `aiot.__ce__(...)`，避免闭包捕获带来
+/// 的 LexicalEnvironment 查找开销。
+const APP_RUNTIME_DEFINITIONS: &str = r#"    var __af_g = (function() {
+      if (typeof globalThis === "object") return globalThis;
+      try { return this || new Function("return this")(); }
+      catch (e) { if (typeof window === "object") return window; }
+      return {};
+    })();
+
+    if (!__af_g.__af_createRequire) {
+      __af_g.__af_createRequire = function(modules) {
+        var cache = {};
+        function __webpack_require__(moduleId) {
+          var cached = cache[moduleId];
+          if (cached !== void 0) return cached.exports;
+          if (!modules[moduleId]) throw new Error("AstroForge module not found: " + moduleId);
+          var module = cache[moduleId] = { exports: {} };
+          modules[moduleId](module, module.exports, __webpack_require__);
+          return module.exports;
+        }
+        __webpack_require__.g = __af_g;
+        __webpack_require__.rv = function() { return "astroforge"; };
+        __webpack_require__.ruid = "bundler=astroforge";
+        return __webpack_require__;
+      };
+    }
+
+    if (!__af_g.$translateStyle$) {
+      __af_g.$translateStyle$ = function(value) {
+        if (typeof value !== "string") return value;
+        return Object.fromEntries(value.split(";").filter(function(item) {
+          return item && item.trim();
+        }).map(function(item) {
+          var match = item.match(/([^:]+):(.*)/);
+          if (!match || match.length < 3) return [];
+          return [
+            match[1].trim().replace(/-([a-z])/g, function(_, c) { return c.toUpperCase(); }),
+            match[2].trim()
+          ];
+        }));
+      };
+    }
+
+    if (!__af_g.__af_normalizeVm) {
+      __af_g.__af_normalizeVm = function(moduleOwn) {
+        var accessors = ["public", "protected", "private"];
+        if (moduleOwn.data && accessors.some(function(acc) { return moduleOwn[acc]; })) {
+          throw new Error("页面VM对象中的属性data不可与\"" + accessors.join(",") + "\"同时存在，请使用private替换data名称");
+        }
+        if (!moduleOwn.data) {
+          moduleOwn.data = {};
+          moduleOwn._descriptor = {};
+          accessors.forEach(function(acc) {
+            var value = moduleOwn[acc];
+            if (typeof value === "object" && value) {
+              Object.assign(moduleOwn.data, value);
+              for (var name in value) moduleOwn._descriptor[name] = { access: acc };
+            } else if (typeof value === "function") {
+              console.warn("页面VM对象中的属性" + acc + "的值不能是函数，请使用对象");
+            }
+          });
+        }
+      };
+    }
+
+    if (!__af_g.__af_interopDefault) {
+      __af_g.__af_interopDefault = function(module) {
+        return module && module.__esModule ? module.default : module;
+      };
+    }
+
+    if (!__af_g.aiot) {
+      var __af_host_aiot = (global && global.aiot) ||
+        (typeof globalThis === "object" && globalThis && globalThis.aiot) ||
+        (window && window.aiot) ||
+        (typeof aiot !== "undefined" ? aiot : undefined);
+      if (__af_host_aiot) __af_g.aiot = __af_host_aiot;
+    }"#;
+
+/// page / component 壳只缓存 `__af_g` 本地引用。
+///
+/// 不再重复定义 helper（由 app.js 装到全局）、不再 `var aiot = resolveAiot(...)`
+/// 闭包捕获（templates 走 bare global `aiot`）、不再 `var __webpack_require__ =
+/// createRequire({})`（系统 require 与 `$translateStyle$` 都改走 `__af_g.*`）。
+const PAGE_RUNTIME_BOOTSTRAP: &str =
+    r#"    var __af_g = (typeof globalThis === "object" && globalThis) || global || {};"#;
 
 #[derive(Default)]
 struct TemplateScope {
@@ -440,7 +493,7 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
                 Attr::Dynamic(binding) => opts.push((
                     "style".to_owned(),
                     dynamic_function(&format!(
-                        "__webpack_require__.g.$translateStyle$({})",
+                        "__af_g.$translateStyle$({})",
                         scope.binding_expr(binding)
                     )),
                 )),
@@ -601,7 +654,7 @@ fn emit_system_requires(requires: &[SystemRequire]) -> String {
     for (local, modules) in by_local {
         if modules.len() == 1 {
             lines.push(format!(
-                "var {} = interopDefault($app_require$({}));",
+                "var {} = __af_g.__af_interopDefault($app_require$({}));",
                 local,
                 js_string(&app_module_require_id(modules[0]))
             ));
@@ -612,7 +665,7 @@ fn emit_system_requires(requires: &[SystemRequire]) -> String {
         for (idx, module) in modules.iter().enumerate() {
             let temp = format!("__astroforge_{local}_{idx}");
             lines.push(format!(
-                "var {temp} = interopDefault($app_require$({}));",
+                "var {temp} = __af_g.__af_interopDefault($app_require$({}));",
                 js_string(&app_module_require_id(module))
             ));
             parts.push(temp);
@@ -965,7 +1018,7 @@ mod tests {
         }]);
         assert_eq!(
             js,
-            "var network = interopDefault($app_require$(\"@app-module/system.fetch\"));"
+            "var network = __af_g.__af_interopDefault($app_require$(\"@app-module/system.fetch\"));"
         );
     }
 
@@ -982,10 +1035,10 @@ mod tests {
             },
         ]);
         assert!(js.contains(
-            "var __astroforge_network_0 = interopDefault($app_require$(\"@app-module/system.fetch\"));"
+            "var __astroforge_network_0 = __af_g.__af_interopDefault($app_require$(\"@app-module/system.fetch\"));"
         ));
         assert!(js.contains(
-            "var __astroforge_network_1 = interopDefault($app_require$(\"@app-module/system.network\"));"
+            "var __astroforge_network_1 = __af_g.__af_interopDefault($app_require$(\"@app-module/system.network\"));"
         ));
         assert!(js.contains(
             "var network = Object.assign({}, __astroforge_network_0, __astroforge_network_1);"
