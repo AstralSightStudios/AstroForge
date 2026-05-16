@@ -1,4 +1,5 @@
 import type { RsbuildPlugin } from "@rsbuild/core";
+import type { PlatformId } from "@astroforge/core/platform";
 import type { AstroForgeManifestInput } from "./config";
 import {
   compileAstroForgeProject,
@@ -7,8 +8,8 @@ import {
 } from "./project";
 
 export interface AstroForgePluginOptions {
-  // 目标后端，当前仅支持 `'vela'`。
-  target?: "vela";
+  // 目标后端。能力校验可识别多平台，当前实际构建仅支持 `'vela'`。
+  target?: PlatformId;
 
   // IR / 中间产物目录。默认 `node_modules/.cache/astroforge/`。
   cacheDir?: string;

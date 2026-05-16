@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse } from "@babel/parser";
+import type { PlatformId } from "@astroforge/core/platform";
 import type { JsonValue } from "./ir";
 
 export interface AstroForgeManifestInput {
@@ -28,7 +29,7 @@ export interface AstroForgeProjectConfig {
 }
 
 export interface AstroForgePluginConfig {
-  target?: "vela";
+  target?: PlatformId;
   cacheDir?: string;
 }
 

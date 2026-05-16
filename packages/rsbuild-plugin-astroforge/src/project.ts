@@ -7,12 +7,19 @@ import {
 } from "node:fs";
 import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { collectAssets } from "./assets";
+import { validatePlatformCapabilities } from "./capabilities";
 import type {
   AstroForgeManifestInput,
   AstroForgeProjectConfig,
 } from "./config";
 import { readAstroForgeConfig } from "./config";
-import type { AppModule, IrDocument, JsonValue, Manifest, RoutePage } from "./ir";
+import type {
+  AppModule,
+  IrDocument,
+  JsonValue,
+  Manifest,
+  RoutePage,
+} from "./ir";
 import { IR_VERSION } from "./ir";
 import {
   extractAppFromTsx,
@@ -83,6 +90,7 @@ export function compileAstroForgeProject(
     );
   }
   document.assets = collectAssets(root, document);
+  validatePlatformCapabilities(document, config.plugin?.target ?? "vela");
 
   const outFile = options.outFile ?? defaultIrOutFile(root, options.cacheDir);
   writeIrDocument(outFile, document);
@@ -185,7 +193,10 @@ function loadCrossFileComponents(
   }
 }
 
-function resolveComponentImport(parent: string, spec: string): string | undefined {
+function resolveComponentImport(
+  parent: string,
+  spec: string,
+): string | undefined {
   const base = resolve(dirname(parent), spec);
   for (const ext of COMPONENT_RESOLUTION_EXTENSIONS) {
     const candidate = `${base}${ext}`;

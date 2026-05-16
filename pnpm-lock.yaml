@@ -326,6 +326,9 @@ importers:
 
   packages/rsbuild-plugin-astroforge:
     dependencies:
+      '@astroforge/core':
+        specifier: workspace:*
+        version: link:../core
       '@babel/parser':
         specifier: ^7.29.3
         version: 7.29.3

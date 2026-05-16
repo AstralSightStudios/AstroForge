@@ -132,6 +132,56 @@ describe("TSX extraction", () => {
     expect(page.script.methods.handleClick).toBeUndefined();
   });
 
+  it("maps extended built-in components to Vela tag names", () => {
+    const page = extractPageFromTsx(
+      `
+        import { List, ListItem, QR, Slider, Swiper, Text } from '@astroforge/core';
+        export default function Page() {
+          return (
+            <List>
+              <ListItem>
+                <Swiper autoPlay={true}><Text>slide</Text></Swiper>
+                <Slider value={40} />
+                <QR value="astroforge" />
+              </ListItem>
+            </List>
+          );
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.template[0]).toMatchObject({
+      kind: "element",
+      value: {
+        tag: "list",
+        is_component: false,
+        children: [
+          {
+            kind: "element",
+            value: {
+              tag: "list-item",
+              is_component: false,
+              children: [
+                {
+                  kind: "element",
+                  value: {
+                    tag: "swiper",
+                    attrs: {
+                      "auto-play": { kind: "static", value: true },
+                    },
+                  },
+                },
+                { kind: "element", value: { tag: "slider" } },
+                { kind: "element", value: { tag: "qr" } },
+              ],
+            },
+          },
+        ],
+      },
+    });
+  });
+
   it("lowers function handlers into script methods", () => {
     const page = extractPageFromTsx(
       `

@@ -14,9 +14,46 @@ import { createEmptyScript, createEmptyStyleTable } from "./ir";
 import { parseStyleTable } from "./style";
 
 const BUILTIN_COMPONENTS = new Map<string, string>([
+  ["A", "a"],
+  ["Barcode", "barcode"],
+  ["Canvas", "canvas"],
+  ["Chart", "chart"],
   ["View", "div"],
+  ["Div", "div"],
   ["Text", "text"],
   ["Image", "image"],
+  ["ImageAnimator", "image-animator"],
+  ["Input", "input"],
+  ["Label", "label"],
+  ["List", "list"],
+  ["ListItem", "list-item"],
+  ["Marquee", "marquee"],
+  ["Media", "media"],
+  ["Option", "option"],
+  ["Picker", "picker"],
+  ["Popup", "popup"],
+  ["Progress", "progress"],
+  ["Prompt", "prompt"],
+  ["QR", "qr"],
+  ["Qr", "qr"],
+  ["Rating", "rating"],
+  ["Refresh", "refresh"],
+  ["RefreshFooter", "refresh-footer"],
+  ["RefreshHeader", "refresh-header"],
+  ["RichText", "richtext"],
+  ["Screen", "screen"],
+  ["Scroll", "scroll"],
+  ["Select", "select"],
+  ["Slider", "slider"],
+  ["Span", "span"],
+  ["Stack", "stack"],
+  ["Swiper", "swiper"],
+  ["Switch", "switch"],
+  ["TabContent", "tab-content"],
+  ["TabBar", "tabbar"],
+  ["Tabs", "tabs"],
+  ["Textarea", "textarea"],
+  ["Video", "video"],
 ]);
 
 export interface ExtractPageOptions {
@@ -159,7 +196,11 @@ export function extractComponentFromTsx(
     bindings,
     options.filename,
   );
-  const componentImports = collectComponentImports(ast.program.body, bindings, []);
+  const componentImports = collectComponentImports(
+    ast.program.body,
+    bindings,
+    [],
+  );
 
   const component: Component = {
     name: kebabCase(located.localName),
@@ -232,9 +273,7 @@ function locateComponentFunction(
     if (
       statement.type === "ExportNamedDeclaration" &&
       !statement.declaration &&
-      statement.specifiers.some(
-        (s: any) => s.exported?.name === exportName,
-      )
+      statement.specifiers.some((s: any) => s.exported?.name === exportName)
     ) {
       const local = findTopLevelBinding(body, exportName);
       if (local && isFunctionLike(local)) {
@@ -1028,7 +1067,7 @@ function elementFromJsx(
       continue;
     }
 
-    attrs[normalizeAttributeName(attrName)] = attrFromValue(
+    attrs[normalizeAttributeName(attrName, isComponent)] = attrFromValue(
       attr.value,
       filename,
     );
@@ -1542,8 +1581,14 @@ function normalizeJsxText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function normalizeAttributeName(name: string): string {
-  return name === "className" ? "class" : name;
+function normalizeAttributeName(name: string, isComponent: boolean): string {
+  if (name === "className") {
+    return "class";
+  }
+  if (isComponent) {
+    return name;
+  }
+  return name.replace(/[A-Z]/g, (ch) => `-${ch.toLowerCase()}`);
 }
 
 function isEventAttribute(name: string): boolean {

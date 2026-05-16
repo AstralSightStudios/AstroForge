@@ -9,8 +9,9 @@
 - 从项目根目录读取 `astroforge.config.ts`。配置文件必须是可静态解析的对象
   字面量，不执行任意 TypeScript 代码。
 - 自动发现 `src/pages/**/*.{tsx,ts,jsx}` 页面入口。
-- 将 `View`、`Text`、`Image` 识别为 AstroForge 内置组件，并分别转换为
-  Component IR 中的 `div`、`text`、`image`。
+- 将 `@astroforge/core` 导出的 PascalCase 内置组件识别为快应用渲染标签，
+  例如 `View` / `Text` / `Image` 分别转换为 `div` / `text` / `image`，
+  `ListItem` / `ImageAnimator` 分别转换为 `list-item` / `image-animator`。
 - 提取静态文本、静态属性、动态属性绑定和事件绑定。
 - 提取页面函数内的事件处理方法，写入 Page IR 的 `script.methods`。
 - 将 `useState` 的静态初值写入 `script.private_data`，并把简单 setter 调用下
@@ -24,6 +25,8 @@
 - 提取页面模块导出的静态 `style` / `styles` 字符串，转换为 Style IR。
 - 收集 manifest icon、静态 `Image.src`、静态 CSS `url(...)` 指向的项目内资
   源，并写入 IR 根节点的 `assets`。
+- 按 `@astroforge/core/platform` 的能力目录校验目标平台支持的组件与
+  manifest feature，提前拒绝当前目标不能使用的接口或标签。
 - 在 Rsbuild `onBeforeBuild` / `onBeforeDevCompile` 阶段写出
   `node_modules/.cache/astroforge/ir-document.json`。
 - 通过 `modifyRsbuildConfig` 设置 Rsbuild entry，并配置 SWC automatic JSX

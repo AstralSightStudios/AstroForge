@@ -505,17 +505,37 @@ fn element_call(tag: &str, is_component: bool, opts: &str, children: &str) -> St
 }
 
 fn emit_system_requires(requires: &[SystemRequire]) -> String {
-    requires
-        .iter()
-        .map(|item| {
-            format!(
+    let mut by_local: IndexMap<&'static str, Vec<&'static str>> = IndexMap::new();
+    for item in requires {
+        by_local.entry(item.local).or_default().push(item.module);
+    }
+
+    let mut lines = Vec::new();
+    for (local, modules) in by_local {
+        if modules.len() == 1 {
+            lines.push(format!(
                 "var {} = $app_require$({});",
-                item.local,
-                js_string(item.module)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
+                local,
+                js_string(modules[0])
+            ));
+            continue;
+        }
+
+        let mut parts = Vec::new();
+        for (idx, module) in modules.iter().enumerate() {
+            let temp = format!("__astroforge_{local}_{idx}");
+            lines.push(format!(
+                "var {temp} = $app_require$({});",
+                js_string(module)
+            ));
+            parts.push(temp);
+        }
+        lines.push(format!(
+            "var {local} = Object.assign({{}}, {});",
+            parts.join(", ")
+        ));
+    }
+    lines.join("\n")
 }
 
 fn style_table_source(style_table: &[StyleEntry]) -> String {
@@ -703,5 +723,33 @@ mod tests {
         assert!(js.contains("aiot.__ce__(\"div\""));
         assert!(js.contains("aiot.__ci__"));
         assert!(!js.contains("\"block\""));
+    }
+
+    #[test]
+    fn emits_single_network_require_without_wrapper() {
+        let js = emit_system_requires(&[SystemRequire {
+            local: "network",
+            module: "system.fetch",
+        }]);
+        assert_eq!(js, "var network = $app_require$(\"system.fetch\");");
+    }
+
+    #[test]
+    fn emits_merged_network_requires_when_multiple_modules_are_used() {
+        let js = emit_system_requires(&[
+            SystemRequire {
+                local: "network",
+                module: "system.fetch",
+            },
+            SystemRequire {
+                local: "network",
+                module: "system.network",
+            },
+        ]);
+        assert!(js.contains("var __astroforge_network_0 = $app_require$(\"system.fetch\");"));
+        assert!(js.contains("var __astroforge_network_1 = $app_require$(\"system.network\");"));
+        assert!(js.contains(
+            "var network = Object.assign({}, __astroforge_network_0, __astroforge_network_1);"
+        ));
     }
 }

@@ -408,6 +408,47 @@ describe("AstroForge project compiler", () => {
     expect(validateIrDocument(document)).toBe(true);
   });
 
+  it("rejects features unsupported by the selected platform", () => {
+    const tmpRoot = mkdtempSync(join(tmpdir(), "astroforge-capability-"));
+    const srcRoot = join(tmpRoot, "src");
+    mkdirSync(join(srcRoot, "pages/index"), { recursive: true });
+    mkdirSync(join(srcRoot, "common"), { recursive: true });
+    writeFileSync(
+      join(srcRoot, "pages/index/index.tsx"),
+      `import { Text, View } from "@astroforge/core";
+
+export default function IndexPage() {
+  return <View><Text>Unsupported feature</Text></View>;
+}
+`,
+    );
+    writeFileSync(
+      join(tmpRoot, "astroforge.config.ts"),
+      `export default {
+  manifest: {
+    package: "com.example.unsupported",
+    name: "unsupported",
+    versionName: "0.0.0",
+    versionCode: 1,
+    minPlatformVersion: 1200,
+    icon: "/common/logo.png",
+    deviceTypeList: ["watch"],
+    features: [{ name: "system.bluetooth" }],
+  },
+  plugin: { target: "vela" },
+};
+`,
+    );
+    writeFileSync(join(srcRoot, "common/logo.png"), Buffer.alloc(0));
+
+    expect(() =>
+      compileAstroForgeProject({
+        root: tmpRoot,
+        outFile: join(tmpRoot, "ir-document.json"),
+      }),
+    ).toThrow("接口 system.bluetooth");
+  });
+
   it("emits resource-path IR with collected static image assets", () => {
     const { document } = compileFixture(resourceFixtureRoot);
 

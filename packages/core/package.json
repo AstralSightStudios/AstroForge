@@ -7,6 +7,9 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./components": "./src/components.ts",
+    "./apis": "./src/apis.ts",
+    "./platform": "./src/platform.ts",
     "./jsx-runtime": "./src/jsx-runtime.ts",
     "./jsx-dev-runtime": "./src/jsx-runtime.ts"
   },

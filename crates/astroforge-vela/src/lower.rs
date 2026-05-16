@@ -165,8 +165,76 @@ fn detect_system_requires(source: &str) -> Vec<SystemRequire> {
             module: "system.storage",
         },
         SystemRequire {
-            local: "network",
-            module: "system.fetch",
+            local: "velaLocale",
+            module: "locale",
+        },
+        SystemRequire {
+            local: "velaExchange",
+            module: "system.exchange",
+        },
+        SystemRequire {
+            local: "velaCrypto",
+            module: "system.crypto",
+        },
+        SystemRequire {
+            local: "velaConfiguration",
+            module: "system.configuration",
+        },
+        SystemRequire {
+            local: "velaZlib",
+            module: "system.zlib",
+        },
+        SystemRequire {
+            local: "velaServiceClient",
+            module: "system.serviceclient",
+        },
+        SystemRequire {
+            local: "velaEvent",
+            module: "system.event",
+        },
+        SystemRequire {
+            local: "velaFolme",
+            module: "system.folme",
+        },
+        SystemRequire {
+            local: "velaVolume",
+            module: "system.volume",
+        },
+        SystemRequire {
+            local: "velaMediaSession",
+            module: "system.media.session",
+        },
+        SystemRequire {
+            local: "velaProtobuf",
+            module: "system.protobuf",
+        },
+        SystemRequire {
+            local: "velaMqttMessage",
+            module: "system.mqttmessage",
+        },
+        SystemRequire {
+            local: "velaDebug",
+            module: "system.debug",
+        },
+        SystemRequire {
+            local: "velaInterconnect",
+            module: "system.interconnect",
+        },
+        SystemRequire {
+            local: "velaBattery",
+            module: "system.battery",
+        },
+        SystemRequire {
+            local: "velaBrightness",
+            module: "system.brightness",
+        },
+        SystemRequire {
+            local: "velaBluetoothBLE",
+            module: "system.bluetooth.ble",
+        },
+        SystemRequire {
+            local: "velaJumpApp",
+            module: "jumpApp",
         },
     ];
 
@@ -175,7 +243,55 @@ fn detect_system_requires(source: &str) -> Vec<SystemRequire> {
             out.push(item);
         }
     }
+    out.extend(detect_network_requires(source));
     out
+}
+
+fn detect_network_requires(source: &str) -> Vec<SystemRequire> {
+    let mut out = Vec::new();
+    let modules = [
+        ("system.fetch", &["fetch"][..]),
+        ("system.uploadtask", &["uploadFile"][..]),
+        ("system.request", &["download", "onDownloadComplete"][..]),
+        (
+            "system.network",
+            &["getType", "subscribe", "unsubscribe"][..],
+        ),
+    ];
+
+    for (module, members) in modules {
+        if members
+            .iter()
+            .any(|member| contains_member_access(source, "network", member))
+        {
+            out.push(SystemRequire {
+                local: "network",
+                module,
+            });
+        }
+    }
+    out
+}
+
+fn contains_member_access(source: &str, object: &str, member: &str) -> bool {
+    let pattern = format!("{object}.{member}");
+    let bytes = source.as_bytes();
+    let needle = pattern.as_bytes();
+    if bytes.len() < needle.len() {
+        return false;
+    }
+
+    for idx in 0..=bytes.len() - needle.len() {
+        if &bytes[idx..idx + needle.len()] != needle {
+            continue;
+        }
+        let before = idx.checked_sub(1).and_then(|i| bytes.get(i)).copied();
+        let after = bytes.get(idx + needle.len()).copied();
+        if !is_ident_byte(before) && !is_ident_byte(after) {
+            return true;
+        }
+    }
+    false
 }
 
 fn contains_identifier(source: &str, ident: &str) -> bool {
@@ -500,6 +616,69 @@ mod tests {
                 .map(|item| (item.local, item.module))
                 .collect::<Vec<_>>(),
             vec![("router", "system.router"), ("storage", "system.storage")]
+        );
+    }
+
+    #[test]
+    fn detects_network_bridge_by_member() {
+        let fetch_only = detect_system_requires(
+            r#"{
+              load: function load() { network.fetch({ url: "https://example.com" }); }
+            }"#,
+        );
+        assert_eq!(
+            fetch_only
+                .iter()
+                .map(|item| (item.local, item.module))
+                .collect::<Vec<_>>(),
+            vec![("network", "system.fetch")]
+        );
+
+        let mixed = detect_system_requires(
+            r#"{
+              sync: function sync() {
+                network.fetch({ url: "https://example.com" });
+                network.getType({ success: function() {} });
+                network.download({ url: "https://example.com/file" });
+              }
+            }"#,
+        );
+        assert_eq!(
+            mixed
+                .iter()
+                .map(|item| (item.local, item.module))
+                .collect::<Vec<_>>(),
+            vec![
+                ("network", "system.fetch"),
+                ("network", "system.request"),
+                ("network", "system.network")
+            ]
+        );
+    }
+
+    #[test]
+    fn detects_new_vela_system_features() {
+        let requires = detect_system_requires(
+            r#"{
+              status: function status() {
+                velaBattery.getStatus({});
+                velaBrightness.setKeepScreenOn({ keepScreenOn: true });
+                velaBluetoothBLE.createScanner();
+                velaInterconnect.instance();
+              }
+            }"#,
+        );
+        assert_eq!(
+            requires
+                .iter()
+                .map(|item| (item.local, item.module))
+                .collect::<Vec<_>>(),
+            vec![
+                ("velaInterconnect", "system.interconnect"),
+                ("velaBattery", "system.battery"),
+                ("velaBrightness", "system.brightness"),
+                ("velaBluetoothBLE", "system.bluetooth.ble")
+            ]
         );
     }
 }
