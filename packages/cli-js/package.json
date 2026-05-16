@@ -1,7 +1,7 @@
 {
   "name": "@astralsight/astroforge",
   "version": "0.0.1",
-  "description": "AstroForge CLI — React/TSX 智能手表快应用工具链的 Node 端薄壳。按 os/cpu 通过 optionalDependencies 自动下载预编译 Rust 二进制后转发。",
+  "description": "AstroForge CLI — React/TSX Smartwatch Quick App Toolchain",
   "license": "MIT",
   "repository": {
     "type": "git",
