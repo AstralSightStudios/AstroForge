@@ -172,6 +172,81 @@ describe("TSX extraction", () => {
     expect(page.script.methods.handleClick).toBeUndefined();
   });
 
+  it("extracts inline arrow event handlers as template functions", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [count, setCount] = useState(0);
+          return <View onClick={() => { setCount((prev) => prev + 1); }} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect((page.template[0] as any).value.events.click).toEqual({
+      path: "() => { setCount((prev) => prev + 1); }",
+      expr: "function(evt) {\n  _vm_.count = _vm_.count + 1;\n}",
+      is_callable: true,
+    });
+  });
+
+  it("keeps runtime bridge imports unqualified inside inline event handlers", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, router } from '@astralsight/astroforge-core';
+        export default function Page() {
+          return <View onClick={() => router.push({ uri: "pages/detail" })} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect((page.template[0] as any).value.events.click.expr).toContain(
+      'router.push({ uri: "pages/detail" })',
+    );
+    expect((page.template[0] as any).value.events.click.expr).not.toContain(
+      "_vm_.router",
+    );
+  });
+
+  it("extracts template literals and ternaries as text value expressions", () => {
+    const page = extractPageFromTsx(
+      `
+        import { Text, View, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [items, setItems] = useState([1, 2]);
+          const [cost, setCost] = useState(null);
+          return (
+            <View>
+              <Text className="info">{\`已创建组件：\${items.length}\`}</Text>
+              <Text>{cost === null ? "--" : \`\${cost}ms\`}</Text>
+            </View>
+          );
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    const children = (page.template[0] as any).value.children;
+    expect(children[0].value.children[0]).toEqual({
+      kind: "expression",
+      value: {
+        path: "`已创建组件：${items.length}`",
+        expr: '"已创建组件：" + (_vm_.items.length)',
+        is_callable: false,
+      },
+    });
+    expect(children[1].value.children[0]).toEqual({
+      kind: "expression",
+      value: {
+        path: 'cost === null ? "--" : `${cost}ms`',
+        expr: '_vm_.cost === null ? "--" : (_vm_.cost) + "ms"',
+        is_callable: false,
+      },
+    });
+  });
+
   it("maps extended built-in components to Vela tag names", () => {
     const page = extractPageFromTsx(
       `
@@ -469,10 +544,8 @@ describe("TSX extraction", () => {
     );
 
     expect(page.script.lifecycle).toEqual({
-      onReady:
-        'function onReady() {\n  console.log(this.message);\n}',
-      onDestroy:
-        'function onDestroy() {\n  console.log("cleanup");\n}',
+      onReady: "function onReady() {\n  console.log(this.message);\n}",
+      onDestroy: 'function onDestroy() {\n  console.log("cleanup");\n}',
     });
   });
 

@@ -101,6 +101,18 @@ interface ScriptContext {
   stateSetters: Map<string, string>;
 }
 
+interface ScriptExtraction {
+  script: Script;
+  context: ScriptContext;
+}
+
+interface TemplateContext {
+  source: string;
+  filename?: string;
+  scriptContext: ScriptContext;
+  aliases: Map<string, string>;
+}
+
 export function extractPageFromTsx(
   source: string,
   options: ExtractPageOptions,
@@ -122,16 +134,17 @@ export function extractPageModuleFromTsx(
     ast.program.body,
     options.filename,
   );
-  const script = extractScript(
+  const scriptExtraction = extractScript(
     source,
     ast.program.body,
     pageFunction.node,
     options.filename,
   );
+  const script = scriptExtraction.script;
   const template = templateFromRenderExpression(
     pageFunction.renderExpression,
     bindings,
-    options.filename,
+    createTemplateContext(source, options.filename, scriptExtraction.context),
   );
   const components = extractLocalComponents(
     source,
@@ -205,10 +218,18 @@ export function extractComponentFromTsx(
     options.filename,
   );
 
+  const script: Script = {
+    ...createEmptyScript(),
+    props: extractComponentProps(
+      located.node,
+      ast.program.body,
+      options.filename,
+    ),
+  };
   const template = templateFromRenderExpression(
     located.renderExpression,
     bindings,
-    options.filename,
+    createTemplateContext(source, options.filename),
   );
   const componentImports = collectComponentImports(
     ast.program.body,
@@ -219,14 +240,7 @@ export function extractComponentFromTsx(
   const component: Component = {
     name: kebabCase(located.localName),
     template,
-    script: {
-      ...createEmptyScript(),
-      props: extractComponentProps(
-        located.node,
-        ast.program.body,
-        options.filename,
-      ),
-    },
+    script,
     style: extractStyleTable(
       source,
       ast.program.body,
@@ -412,9 +426,10 @@ function collectAstroForgeImports(body: any[]): Map<string, string> {
   for (const statement of body) {
     if (
       statement.type !== "ImportDeclaration" ||
-      !["@astralsight/astroforge-core", "@astralsight/astroforge-core/components"].includes(
-        statement.source.value,
-      )
+      ![
+        "@astralsight/astroforge-core",
+        "@astralsight/astroforge-core/components",
+      ].includes(statement.source.value)
     ) {
       continue;
     }
@@ -467,7 +482,7 @@ function extractLocalComponents(
       template: templateFromRenderExpression(
         renderExpressionFromFunction(fn, filename),
         bindings,
-        filename,
+        createTemplateContext(source, filename),
       ),
       script: {
         ...createEmptyScript(),
@@ -724,9 +739,7 @@ function extractStyleTable(
     }
     const css = loadStyle?.(specifier, filename);
     if (css === undefined) {
-      throw new Error(
-        `${filename ?? "TSX"}: CSS import ${specifier} 无法解析`,
-      );
+      throw new Error(`${filename ?? "TSX"}: CSS import ${specifier} 无法解析`);
     }
     chunks.push(css);
   }
@@ -754,7 +767,9 @@ function extractStyleTable(
         continue;
       }
       if (init.type === "TemplateLiteral" && init.expressions.length === 0) {
-        chunks.push(init.quasis.map((quasi: any) => quasi.value.cooked).join(""));
+        chunks.push(
+          init.quasis.map((quasi: any) => quasi.value.cooked).join(""),
+        );
         continue;
       }
       throw new Error(`${filename ?? "TSX"}: styles 必须是静态字符串`);
@@ -804,14 +819,13 @@ function extractScript(
   moduleBody: any[],
   pageFunction: any,
   filename?: string,
-): Script {
+): ScriptExtraction {
   const script = createEmptyScript();
   const body = unwrapExpression(pageFunction.body);
-  if (body.type !== "BlockStatement") {
-    return script;
-  }
-
   const context = createScriptContext(source, filename);
+  if (body.type !== "BlockStatement") {
+    return { script, context };
+  }
 
   for (const statement of body.body) {
     collectUseStateDeclaration(script, context, statement);
@@ -824,7 +838,7 @@ function extractScript(
   collectPageLifecycle(script, context, moduleBody);
   collectUseEffectCalls(script, context, body.body);
 
-  return script;
+  return { script, context };
 }
 
 function createScriptContext(source: string, filename?: string): ScriptContext {
@@ -834,6 +848,31 @@ function createScriptContext(source: string, filename?: string): ScriptContext {
     stateVars: new Set(),
     stateSetters: new Map(),
   };
+}
+
+function createTemplateContext(
+  source: string,
+  filename?: string,
+  scriptContext = createScriptContext(source, filename),
+  aliases: Map<string, string> = new Map(),
+): TemplateContext {
+  return {
+    source,
+    filename,
+    scriptContext,
+    aliases,
+  };
+}
+
+function withTemplateAliases(
+  context: TemplateContext,
+  aliases: Array<[string, string]>,
+): TemplateContext {
+  const next = new Map(context.aliases);
+  for (const [source, target] of aliases) {
+    next.set(source, target);
+  }
+  return { ...context, aliases: next };
 }
 
 function collectUseStateDeclaration(
@@ -1053,11 +1092,14 @@ function appendLifecycleBody(
   const bodies = [existing ? functionBodyFromSource(existing) : "", body]
     .map((item) => item.trim())
     .filter(Boolean);
-  lifecycle[name] = `function ${name}() {\n${indentJsBody(bodies.join("\n"))}\n}`;
+  lifecycle[name] =
+    `function ${name}() {\n${indentJsBody(bodies.join("\n"))}\n}`;
 }
 
 function functionBodyFromSource(source: string): string {
-  const match = source.match(/^function\s+[A-Za-z_$][\w$]*\([^)]*\)\s*\{\n?([\s\S]*)\n?\}$/);
+  const match = source.match(
+    /^function\s+[A-Za-z_$][\w$]*\([^)]*\)\s*\{\n?([\s\S]*)\n?\}$/,
+  );
   if (!match) return source;
   return match[1]
     .split("\n")
@@ -1300,6 +1342,346 @@ function lowerStateSetterCall(
   return `this.${stateName} = ${lowerExpression(context, expression)}`;
 }
 
+function lowerTemplateEventHandler(
+  context: TemplateContext,
+  node: any,
+): string {
+  const fn = unwrapExpression(node);
+  const firstParam = fn.params?.[0];
+  const aliases: Array<[string, string]> = [];
+  if (firstParam?.type === "Identifier") {
+    aliases.push([firstParam.name, "evt"]);
+  }
+  const bodyContext = withTemplateAliases(context, aliases);
+  const body = lowerTemplateFunctionBody(bodyContext, fn.body);
+  return `function(evt) ${body}`;
+}
+
+function lowerTemplateFunctionBody(
+  context: TemplateContext,
+  body: any,
+): string {
+  const node = unwrapExpression(body);
+  if (node.type !== "BlockStatement") {
+    return `{ return ${lowerTemplateExpression(context, node)}; }`;
+  }
+
+  const statements = node.body
+    .map((statement: any) => lowerTemplateStatement(context, statement))
+    .filter(Boolean);
+  if (statements.length === 0) {
+    return "{}";
+  }
+  return `{\n${statements.map((statement: string) => `  ${statement}`).join("\n")}\n}`;
+}
+
+function lowerTemplateStatement(
+  context: TemplateContext,
+  statement: any,
+): string {
+  switch (statement.type) {
+    case "ExpressionStatement":
+      return `${lowerTemplateExpression(context, statement.expression)};`;
+    case "ReturnStatement":
+      return statement.argument
+        ? `return ${lowerTemplateExpression(context, statement.argument)};`
+        : "return;";
+    case "VariableDeclaration":
+      return lowerTemplateVariableDeclaration(context, statement);
+    case "IfStatement":
+      return lowerTemplateIfStatement(context, statement);
+    case "BlockStatement": {
+      const body = statement.body
+        .map((item: any) => lowerTemplateStatement(context, item))
+        .filter(Boolean)
+        .map((item: string) => `  ${item}`)
+        .join("\n");
+      return body ? `{\n${body}\n}` : "{}";
+    }
+    default:
+      throw new Error(
+        `${context.filename ?? "TSX"}: 内联事件暂不支持 ${statement.type}`,
+      );
+  }
+}
+
+function lowerTemplateVariableDeclaration(
+  context: TemplateContext,
+  statement: any,
+): string {
+  const declarations = statement.declarations.map((declarator: any) => {
+    const id = sourceForNode(context.source, declarator.id);
+    if (!declarator.init) {
+      return id;
+    }
+    return `${id} = ${lowerTemplateExpression(context, declarator.init)}`;
+  });
+  return `${statement.kind} ${declarations.join(", ")};`;
+}
+
+function lowerTemplateIfStatement(
+  context: TemplateContext,
+  statement: any,
+): string {
+  const test = lowerTemplateExpression(context, statement.test);
+  const consequent = lowerTemplateStatementAsBlock(
+    context,
+    statement.consequent,
+  );
+  if (!statement.alternate) {
+    return `if (${test}) ${consequent}`;
+  }
+  const alternate =
+    statement.alternate.type === "IfStatement"
+      ? lowerTemplateIfStatement(context, statement.alternate)
+      : lowerTemplateStatementAsBlock(context, statement.alternate);
+  return `if (${test}) ${consequent} else ${alternate}`;
+}
+
+function lowerTemplateStatementAsBlock(
+  context: TemplateContext,
+  statement: any,
+): string {
+  if (statement.type === "BlockStatement") {
+    return lowerTemplateStatement(context, statement);
+  }
+  return `{\n  ${lowerTemplateStatement(context, statement)}\n}`;
+}
+
+function lowerTemplateExpression(
+  context: TemplateContext,
+  expression: any,
+): string {
+  const node = unwrapExpression(expression);
+
+  switch (node.type) {
+    case "Identifier":
+      return lowerTemplateIdentifier(context, node.name);
+    case "StringLiteral":
+      return JSON.stringify(node.value);
+    case "NumericLiteral":
+      return String(node.value);
+    case "BooleanLiteral":
+      return String(node.value);
+    case "NullLiteral":
+      return "null";
+    case "TemplateLiteral":
+      return lowerTemplateLiteral(context, node);
+    case "ConditionalExpression":
+      return `${lowerTemplateExpression(context, node.test)} ? ${lowerTemplateExpression(context, node.consequent)} : ${lowerTemplateExpression(context, node.alternate)}`;
+    case "BinaryExpression":
+    case "LogicalExpression":
+      return `${lowerTemplateExpression(context, node.left)} ${node.operator} ${lowerTemplateExpression(context, node.right)}`;
+    case "UnaryExpression":
+      return `${node.operator}${lowerTemplateExpression(context, node.argument)}`;
+    case "AssignmentExpression":
+      return `${lowerTemplateExpression(context, node.left)} ${node.operator} ${lowerTemplateExpression(context, node.right)}`;
+    case "UpdateExpression": {
+      const argument = lowerTemplateExpression(context, node.argument);
+      return node.prefix
+        ? `${node.operator}${argument}`
+        : `${argument}${node.operator}`;
+    }
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return lowerTemplateMemberExpression(context, node);
+    case "CallExpression":
+    case "OptionalCallExpression":
+      return lowerTemplateCallExpression(context, node);
+    case "ArrayExpression":
+      return `[${node.elements
+        .map((item: any) =>
+          item
+            ? item.type === "SpreadElement"
+              ? `...${lowerTemplateExpression(context, item.argument)}`
+              : lowerTemplateExpression(context, item)
+            : "",
+        )
+        .join(", ")}]`;
+    case "ObjectExpression":
+      return lowerTemplateObjectExpression(context, node);
+    case "ArrowFunctionExpression":
+    case "FunctionExpression":
+      return lowerTemplateEventHandler(context, node);
+    default:
+      throw new Error(
+        `${context.filename ?? "TSX"}: 文本绑定暂不支持 ${node.type}`,
+      );
+  }
+}
+
+function lowerTemplateIdentifier(
+  context: TemplateContext,
+  name: string,
+): string {
+  const alias = context.aliases.get(name);
+  if (alias) {
+    return alias;
+  }
+  if (TEMPLATE_GLOBALS.has(name)) {
+    return name;
+  }
+  return `_vm_.${name}`;
+}
+
+function lowerTemplateMemberExpression(
+  context: TemplateContext,
+  node: any,
+): string {
+  const object = unwrapExpression(node.object);
+  let base: string;
+  if (object.type === "Identifier" && object.name === "props") {
+    base = "_vm_";
+  } else {
+    base = lowerTemplateExpression(context, object);
+  }
+
+  const operator = node.optional ? "?." : ".";
+  if (node.computed) {
+    return `${base}${node.optional ? "?." : ""}[${lowerTemplateExpression(context, node.property)}]`;
+  }
+  const property = sourceForNode(context.source, node.property);
+  return `${base}${operator}${property}`;
+}
+
+function lowerTemplateCallExpression(
+  context: TemplateContext,
+  node: any,
+): string {
+  const setterTarget =
+    node.callee.type === "Identifier"
+      ? context.scriptContext.stateSetters.get(node.callee.name)
+      : undefined;
+  if (setterTarget) {
+    return lowerTemplateStateSetterCall(context, setterTarget, node);
+  }
+
+  const optional = node.optional ? "?." : "";
+  const callee = lowerTemplateExpression(context, node.callee);
+  const args = node.arguments
+    .map((arg: any) => {
+      if (arg.type === "SpreadElement") {
+        return `...${lowerTemplateExpression(context, arg.argument)}`;
+      }
+      return lowerTemplateExpression(context, arg);
+    })
+    .join(", ");
+  return `${callee}${optional}(${args})`;
+}
+
+function lowerTemplateStateSetterCall(
+  context: TemplateContext,
+  stateName: string,
+  node: any,
+): string {
+  const next = node.arguments[0];
+  if (!next) {
+    return `_vm_.${stateName} = null`;
+  }
+
+  const expression = unwrapExpression(next);
+  if (expression.type === "ArrowFunctionExpression") {
+    const firstParam = expression.params[0];
+    const aliases =
+      firstParam?.type === "Identifier"
+        ? ([[firstParam.name, `_vm_.${stateName}`]] as Array<[string, string]>)
+        : [];
+    if (expression.body.type === "BlockStatement") {
+      throw new Error(
+        `${context.filename ?? "TSX"}: setState updater 暂不支持 block body`,
+      );
+    }
+    return `_vm_.${stateName} = ${lowerTemplateExpression(
+      withTemplateAliases(context, aliases),
+      expression.body,
+    )}`;
+  }
+
+  return `_vm_.${stateName} = ${lowerTemplateExpression(context, expression)}`;
+}
+
+function lowerTemplateLiteral(context: TemplateContext, node: any): string {
+  const parts: string[] = [];
+  node.quasis.forEach((quasi: any, index: number) => {
+    const text = quasi.value.cooked ?? quasi.value.raw ?? "";
+    if (text) {
+      parts.push(JSON.stringify(text));
+    }
+    const expression = node.expressions[index];
+    if (expression) {
+      parts.push(`(${lowerTemplateExpression(context, expression)})`);
+    }
+  });
+  return parts.length > 0 ? parts.join(" + ") : '""';
+}
+
+function lowerTemplateObjectExpression(
+  context: TemplateContext,
+  node: any,
+): string {
+  const entries = node.properties.map((property: any) => {
+    if (property.type === "SpreadElement") {
+      return `...${lowerTemplateExpression(context, property.argument)}`;
+    }
+    if (property.type !== "ObjectProperty") {
+      throw new Error(`${context.filename ?? "TSX"}: 文本绑定暂不支持对象方法`);
+    }
+    const key = property.computed
+      ? `[${lowerTemplateExpression(context, property.key)}]`
+      : jsObjectKey(objectPropertyKey(property.key, context.filename));
+    return `${key}: ${lowerTemplateExpression(context, property.value)}`;
+  });
+  return `{ ${entries.join(", ")} }`;
+}
+
+function jsObjectKey(key: string): string {
+  return /^[A-Za-z_$][\w$]*$/.test(key) ? key : JSON.stringify(key);
+}
+
+const TEMPLATE_GLOBALS = new Set([
+  "Array",
+  "Boolean",
+  "Date",
+  "Infinity",
+  "JSON",
+  "Math",
+  "NaN",
+  "Number",
+  "Object",
+  "Promise",
+  "String",
+  "console",
+  "false",
+  "isFinite",
+  "isNaN",
+  "null",
+  "parseFloat",
+  "parseInt",
+  "network",
+  "router",
+  "storage",
+  "true",
+  "undefined",
+  "velaBattery",
+  "velaBluetoothBLE",
+  "velaBrightness",
+  "velaConfiguration",
+  "velaCrypto",
+  "velaDebug",
+  "velaEvent",
+  "velaExchange",
+  "velaFolme",
+  "velaInterconnect",
+  "velaJumpApp",
+  "velaLocale",
+  "velaMediaSession",
+  "velaMqttMessage",
+  "velaProtobuf",
+  "velaServiceClient",
+  "velaVolume",
+  "velaZlib",
+]);
+
 function findTopLevelBinding(body: any[], name: string): any | undefined {
   for (const statement of body) {
     if (
@@ -1349,9 +1731,9 @@ function renderExpressionFromFunction(node: any, filename?: string): any {
 function templateFromRenderExpression(
   expression: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Node[] {
-  const node = nodeFromJsx(expression, bindings, filename);
+  const node = nodeFromJsx(expression, bindings, context);
   if (node.kind === "fragment") {
     return node.value;
   }
@@ -1361,30 +1743,32 @@ function templateFromRenderExpression(
 function nodeFromJsx(
   node: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Node {
   switch (node.type) {
     case "JSXElement":
       return {
         kind: "element",
-        value: elementFromJsx(node, bindings, filename),
+        value: elementFromJsx(node, bindings, context),
       };
     case "JSXFragment":
       return {
         kind: "fragment",
-        value: childrenFromJsx(node.children, bindings, filename),
+        value: childrenFromJsx(node.children, bindings, context),
       };
     default:
-      throw new Error(`${filename ?? "TSX"}: 不支持的 JSX 根节点 ${node.type}`);
+      throw new Error(
+        `${context.filename ?? "TSX"}: 不支持的 JSX 根节点 ${node.type}`,
+      );
   }
 }
 
 function elementFromJsx(
   node: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Element {
-  const name = jsxElementName(node.openingElement.name, filename);
+  const name = jsxElementName(node.openingElement.name, context.filename);
   const tag = bindings.get(name) ?? name;
   const isComponent = !bindings.has(name) && /^[A-Z]/.test(name);
   const attrs: Record<string, Attr> = {};
@@ -1392,10 +1776,10 @@ function elementFromJsx(
 
   for (const attr of node.openingElement.attributes) {
     if (attr.type === "JSXSpreadAttribute") {
-      throw new Error(`${filename ?? "TSX"}: 暂不支持 JSX spread 属性`);
+      throw new Error(`${context.filename ?? "TSX"}: 暂不支持 JSX spread 属性`);
     }
 
-    const attrName = jsxAttributeName(attr.name, filename);
+    const attrName = jsxAttributeName(attr.name, context.filename);
     if (attrName === "key") {
       continue;
     }
@@ -1403,17 +1787,13 @@ function elementFromJsx(
       events[eventNameFromAttribute(attrName)] = bindingFromAttribute(
         attr.value,
         true,
-        filename,
+        context,
       );
       continue;
     }
 
     const normalizedName = normalizeAttributeName(attrName, isComponent);
-    attrs[normalizedName] = attrFromValue(
-      normalizedName,
-      attr.value,
-      filename,
-    );
+    attrs[normalizedName] = attrFromValue(normalizedName, attr.value, context);
   }
 
   return {
@@ -1421,14 +1801,14 @@ function elementFromJsx(
     is_component: isComponent,
     attrs,
     events,
-    children: childrenFromJsx(node.children, bindings, filename),
+    children: childrenFromJsx(node.children, bindings, context),
   };
 }
 
 function childrenFromJsx(
   children: any[],
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Node[] {
   const out: Node[] = [];
 
@@ -1442,7 +1822,7 @@ function childrenFromJsx(
     }
 
     if (child.type === "JSXElement" || child.type === "JSXFragment") {
-      const node = nodeFromJsx(child, bindings, filename);
+      const node = nodeFromJsx(child, bindings, context);
       if (node.kind === "fragment") {
         out.push(...node.value);
       } else {
@@ -1456,11 +1836,13 @@ function childrenFromJsx(
       if (expression.type === "JSXEmptyExpression") {
         continue;
       }
-      out.push(nodeFromExpression(expression, bindings, filename));
+      out.push(nodeFromExpression(expression, bindings, context));
       continue;
     }
 
-    throw new Error(`${filename ?? "TSX"}: 不支持的 JSX 子节点 ${child.type}`);
+    throw new Error(
+      `${context.filename ?? "TSX"}: 不支持的 JSX 子节点 ${child.type}`,
+    );
   }
 
   return out;
@@ -1469,16 +1851,16 @@ function childrenFromJsx(
 function nodeFromExpression(
   expression: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Node {
-  const conditional = conditionalFromExpression(expression, bindings, filename);
-  if (conditional) {
-    return conditional;
-  }
-
-  const list = listFromExpression(expression, bindings, filename);
+  const list = listFromExpression(expression, bindings, context);
   if (list) {
     return list;
+  }
+
+  const conditional = conditionalFromExpression(expression, bindings, context);
+  if (conditional) {
+    return conditional;
   }
 
   const value = literalValue(expression);
@@ -1488,43 +1870,48 @@ function nodeFromExpression(
 
   return {
     kind: "expression",
-    value: bindingFromExpression(expression, false, filename),
+    value: bindingFromExpression(expression, false, context),
   };
 }
 
 function conditionalFromExpression(
   expression: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Node | undefined {
   const node = unwrapExpression(expression);
   if (node.type === "ConditionalExpression") {
+    if (
+      !isControlFlowBranch(node.consequent) &&
+      !isControlFlowBranch(node.alternate)
+    ) {
+      return undefined;
+    }
     return {
       kind: "conditional",
       value: {
         branches: [
           {
-            guard: bindingFromExpression(node.test, false, filename),
-            body: nodesFromBranchExpression(
-              node.consequent,
-              bindings,
-              filename,
-            ),
+            guard: bindingFromExpression(node.test, false, context),
+            body: nodesFromBranchExpression(node.consequent, bindings, context),
           },
-          ...alternateBranches(node.alternate, bindings, filename),
+          ...alternateBranches(node.alternate, bindings, context),
         ],
       },
     };
   }
 
   if (node.type === "LogicalExpression" && node.operator === "&&") {
+    if (!isControlFlowBranch(node.right)) {
+      return undefined;
+    }
     return {
       kind: "conditional",
       value: {
         branches: [
           {
-            guard: bindingFromExpression(node.left, false, filename),
-            body: nodesFromBranchExpression(node.right, bindings, filename),
+            guard: bindingFromExpression(node.left, false, context),
+            body: nodesFromBranchExpression(node.right, bindings, context),
           },
         ],
       },
@@ -1537,23 +1924,23 @@ function conditionalFromExpression(
 function alternateBranches(
   expression: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Array<{ guard: Binding | null; body: Node[] }> {
   const node = unwrapExpression(expression);
   if (node.type === "ConditionalExpression") {
     return [
       {
-        guard: bindingFromExpression(node.test, false, filename),
-        body: nodesFromBranchExpression(node.consequent, bindings, filename),
+        guard: bindingFromExpression(node.test, false, context),
+        body: nodesFromBranchExpression(node.consequent, bindings, context),
       },
-      ...alternateBranches(node.alternate, bindings, filename),
+      ...alternateBranches(node.alternate, bindings, context),
     ];
   }
 
   return [
     {
       guard: null,
-      body: nodesFromBranchExpression(node, bindings, filename),
+      body: nodesFromBranchExpression(node, bindings, context),
     },
   ];
 }
@@ -1561,7 +1948,7 @@ function alternateBranches(
 function nodesFromBranchExpression(
   expression: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Node[] {
   const node = unwrapExpression(expression);
   if (node.type === "NullLiteral") {
@@ -1571,16 +1958,36 @@ function nodesFromBranchExpression(
     return [];
   }
   if (node.type === "JSXElement" || node.type === "JSXFragment") {
-    const result = nodeFromJsx(node, bindings, filename);
+    const result = nodeFromJsx(node, bindings, context);
     return result.kind === "fragment" ? result.value : [result];
   }
-  return [nodeFromExpression(node, bindings, filename)];
+  return [nodeFromExpression(node, bindings, context)];
+}
+
+function isControlFlowBranch(expression: any): boolean {
+  const node = unwrapExpression(expression);
+  if (node.type === "JSXElement" || node.type === "JSXFragment") {
+    return true;
+  }
+  if (node.type === "NullLiteral") {
+    return true;
+  }
+  if (node.type === "BooleanLiteral" && node.value === false) {
+    return true;
+  }
+  if (node.type === "ConditionalExpression") {
+    return (
+      isControlFlowBranch(node.consequent) ||
+      isControlFlowBranch(node.alternate)
+    );
+  }
+  return false;
 }
 
 function listFromExpression(
   expression: any,
   bindings: Map<string, string>,
-  filename?: string,
+  context: TemplateContext,
 ): Node | undefined {
   const node = unwrapExpression(expression);
   if (
@@ -1595,30 +2002,43 @@ function listFromExpression(
 
   const callback = unwrapExpression(node.arguments[0]);
   if (!callback || !isFunctionLike(callback)) {
-    throw new Error(`${filename ?? "TSX"}: list render 的 map 参数必须是函数`);
+    throw new Error(
+      `${context.filename ?? "TSX"}: list render 的 map 参数必须是函数`,
+    );
   }
 
   const itemParam = callback.params[0];
   if (itemParam?.type !== "Identifier") {
-    throw new Error(`${filename ?? "TSX"}: list render 必须声明 item 参数`);
+    throw new Error(
+      `${context.filename ?? "TSX"}: list render 必须声明 item 参数`,
+    );
   }
 
   const indexParam = callback.params[1];
   if (indexParam && indexParam.type !== "Identifier") {
     throw new Error(
-      `${filename ?? "TSX"}: list render 的 index 参数必须是标识符`,
+      `${context.filename ?? "TSX"}: list render 的 index 参数必须是标识符`,
     );
   }
 
-  const bodyExpression = renderExpressionFromMapCallback(callback, filename);
+  const bodyExpression = renderExpressionFromMapCallback(
+    callback,
+    context.filename,
+  );
+  const listContext = withTemplateAliases(context, [
+    [itemParam.name, itemParam.name],
+    ...(indexParam
+      ? ([[indexParam.name, indexParam.name]] as Array<[string, string]>)
+      : []),
+  ]);
   return {
     kind: "list",
     value: {
-      source: bindingFromExpression(node.callee.object, false, filename),
+      source: bindingFromExpression(node.callee.object, false, context),
       item_var: itemParam.name,
       index_var: indexParam?.name,
-      key: keyBindingFromJsx(bodyExpression, filename),
-      body: nodesFromBranchExpression(bodyExpression, bindings, filename),
+      key: keyBindingFromJsx(bodyExpression, listContext),
+      body: nodesFromBranchExpression(bodyExpression, bindings, listContext),
     },
   };
 }
@@ -1647,7 +2067,7 @@ function renderExpressionFromMapCallback(
 
 function keyBindingFromJsx(
   expression: any,
-  filename?: string,
+  context: TemplateContext,
 ): Binding | undefined {
   const node = unwrapExpression(expression);
   if (node.type !== "JSXElement") {
@@ -1663,10 +2083,14 @@ function keyBindingFromJsx(
   if (!keyAttr) {
     return undefined;
   }
-  return bindingFromAttribute(keyAttr.value, false, filename);
+  return bindingFromAttribute(keyAttr.value, false, context);
 }
 
-function attrFromValue(name: string, value: any, filename?: string): Attr {
+function attrFromValue(
+  name: string,
+  value: any,
+  context: TemplateContext,
+): Attr {
   if (!value) {
     return { kind: "static", value: true };
   }
@@ -1676,7 +2100,9 @@ function attrFromValue(name: string, value: any, filename?: string): Attr {
   }
 
   if (value.type !== "JSXExpressionContainer") {
-    throw new Error(`${filename ?? "TSX"}: 不支持的属性值 ${value.type}`);
+    throw new Error(
+      `${context.filename ?? "TSX"}: 不支持的属性值 ${value.type}`,
+    );
   }
 
   const expression = unwrapExpression(value.expression);
@@ -1695,12 +2121,13 @@ function attrFromValue(name: string, value: any, filename?: string): Attr {
   if (staticObject !== undefined) {
     return {
       kind: "static",
-      value: name === "style" ? normalizeStyleLiteral(staticObject) : staticObject,
+      value:
+        name === "style" ? normalizeStyleLiteral(staticObject) : staticObject,
     };
   }
 
   if (name === "style") {
-    const styleObject = styleObjectAttr(expression, filename);
+    const styleObject = styleObjectAttr(expression, context);
     if (styleObject) {
       return { kind: "style_object", value: styleObject };
     }
@@ -1708,13 +2135,13 @@ function attrFromValue(name: string, value: any, filename?: string): Attr {
 
   return {
     kind: "dynamic",
-    value: bindingFromExpression(expression, false, filename),
+    value: bindingFromExpression(expression, false, context),
   };
 }
 
 function styleObjectAttr(
   expression: any,
-  filename?: string,
+  context: TemplateContext,
 ): StyleSlot[] | undefined {
   const node = unwrapExpression(expression);
   if (node.type !== "ObjectExpression") return undefined;
@@ -1723,10 +2150,10 @@ function styleObjectAttr(
   for (const property of node.properties) {
     if (property.type !== "ObjectProperty" || property.computed) {
       throw new Error(
-        `${filename ?? "TSX"}: style 对象暂不支持展开、方法或计算键`,
+        `${context.filename ?? "TSX"}: style 对象暂不支持展开、方法或计算键`,
       );
     }
-    const key = kebabToCamel(objectPropertyKey(property.key, filename));
+    const key = kebabToCamel(objectPropertyKey(property.key, context.filename));
     const value = staticAttrLiteral(property.value);
     if (value !== undefined) {
       slots.push({ name: key, value: { kind: "static", value } });
@@ -1736,7 +2163,7 @@ function styleObjectAttr(
       name: key,
       value: {
         kind: "dynamic",
-        value: bindingFromExpression(property.value, false, filename),
+        value: bindingFromExpression(property.value, false, context),
       },
     });
   }
@@ -1822,28 +2249,42 @@ function staticAttrLiteral(expression: any): JsonValue | undefined {
 function bindingFromAttribute(
   value: any,
   callable: boolean,
-  filename?: string,
+  context: TemplateContext,
 ): Binding {
   if (!value || value.type !== "JSXExpressionContainer") {
-    throw new Error(`${filename ?? "TSX"}: 事件属性必须使用表达式绑定`);
+    throw new Error(`${context.filename ?? "TSX"}: 事件属性必须使用表达式绑定`);
   }
   return bindingFromExpression(
     unwrapExpression(value.expression),
     callable,
-    filename,
+    context,
   );
 }
 
 function bindingFromExpression(
   expression: any,
   callable: boolean,
-  filename?: string,
+  context: TemplateContext,
 ): Binding {
-  const path = bindingPath(expression);
-  if (!path) {
-    throw new Error(`${filename ?? "TSX"}: 当前阶段仅支持标识符或成员访问绑定`);
+  const node = unwrapExpression(expression);
+  if (callable && isFunctionLike(node)) {
+    return {
+      path: sourceForNode(context.source, node),
+      expr: lowerTemplateEventHandler(context, node),
+      is_callable: true,
+    };
   }
-  return { path, is_callable: callable };
+
+  const path = bindingPath(expression);
+  if (path) {
+    return { path, is_callable: callable };
+  }
+
+  return {
+    path: sourceForNode(context.source, node),
+    expr: lowerTemplateExpression(context, node),
+    is_callable: callable,
+  };
 }
 
 function bindingPath(expression: any): string | undefined {

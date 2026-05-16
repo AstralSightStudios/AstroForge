@@ -138,6 +138,7 @@ export type StyleSlotValue =
 
 export interface Binding {
   path: string;
+  expr?: string;
   is_callable: boolean;
 }
 

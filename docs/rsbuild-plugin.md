@@ -81,20 +81,21 @@ Phase 2 的 TSX 提取器以稳定 IR 为目标，当前只接受可直接映射
 
 - default export 必须是返回 JSX 的函数；
 - JSX spread 属性暂不支持；
-- 事件属性必须是表达式绑定，例如 `onClick={handleClick}`；
-- 动态属性和文本插值目前只支持标识符或成员访问路径，例如 `{title}`、
-  `{user.name}`；
+- 事件属性必须是表达式绑定，例如 `onClick={handleClick}` 或
+  `onClick={() => handleClick()}`；
+- 动态属性和文本插值支持标识符 / 成员访问路径；文本插值可额外使用三元表
+  达式与模板字符串；
 - `useState` 初值必须是静态 JSON 字面量；
 - `setState` updater 当前支持值表达式或单表达式箭头函数，例如
   `setCount(count + 1)` 与 `setCount((prev) => prev + 1)`；
 - `useEffect` 仅支持省略依赖或空依赖数组；非空依赖数组暂不支持；
-- 条件渲染的 guard 当前只支持标识符或成员访问路径；
+- 条件渲染的 guard 支持可静态下沉到模板闭包的表达式；
 - 列表渲染当前只支持直接的 `.map(...)` 调用，item / index 参数必须是标识符；
 - 页面生命周期必须通过 `export const lifecycle = { ... }` 声明；
 - 应用生命周期必须通过 `src/app.tsx` 的 default export 对象方法声明；
 - 页面静态样式可通过相对 CSS import、`export const style = "..."` 或
   `export const styles = "..."` 声明，不执行运行时代码；
-- 混合内联 style 对象仅支持静态字面量值与标识符 / 成员访问绑定；
+- 混合内联 style 对象支持静态字面量值与可静态下沉到模板闭包的表达式；
 - 本地组件必须使用 PascalCase 顶层函数或函数变量声明；
 - props 推导只读取组件首参的静态 TypeScript 注解，不执行类型检查器；
 - 组件命名空间（`<Foo.Bar />`）暂不支持。

@@ -43,6 +43,7 @@ fn component_node_element_with_event() {
         "click".into(),
         Binding {
             path: "onTap".into(),
+            expr: None,
             is_callable: true,
         },
     );

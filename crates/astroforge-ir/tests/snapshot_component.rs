@@ -42,6 +42,7 @@ fn custom_component_with_mixed_attrs_and_event() {
         "name".into(),
         Attr::Dynamic(Binding {
             path: "user.name".into(),
+            expr: None,
             is_callable: false,
         }),
     );
@@ -55,6 +56,7 @@ fn custom_component_with_mixed_attrs_and_event() {
         "cardtap".into(),
         Binding {
             path: "onCardTap".into(),
+            expr: None,
             is_callable: true,
         },
     );
@@ -75,6 +77,7 @@ fn custom_component_with_mixed_attrs_and_event() {
 fn expression_text_interpolation() {
     let node = Node::Expression(Binding {
         path: "message".into(),
+        expr: None,
         is_callable: false,
     });
 
@@ -89,6 +92,7 @@ fn conditional_three_branches() {
             ConditionalBranch {
                 guard: Some(Binding {
                     path: "isLoading".into(),
+                    expr: None,
                     is_callable: false,
                 }),
                 body: vec![Node::Text("Loading".into())],
@@ -96,6 +100,7 @@ fn conditional_three_branches() {
             ConditionalBranch {
                 guard: Some(Binding {
                     path: "hasError".into(),
+                    expr: None,
                     is_callable: false,
                 }),
                 body: vec![Node::Text("Error".into())],
@@ -118,12 +123,14 @@ fn list_with_key_and_index() {
     let node = Node::List(List {
         source: Binding {
             path: "users".into(),
+            expr: None,
             is_callable: false,
         },
         item_var: "user".into(),
         index_var: Some("idx".into()),
         key: Some(Binding {
             path: "user.id".into(),
+            expr: None,
             is_callable: false,
         }),
         body: vec![Node::Element(Element {
@@ -133,6 +140,7 @@ fn list_with_key_and_index() {
             events: IndexMap::new(),
             children: vec![Node::Expression(Binding {
                 path: "user.name".into(),
+                expr: None,
                 is_callable: false,
             })],
         })],

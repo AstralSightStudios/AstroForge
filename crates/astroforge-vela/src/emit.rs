@@ -261,6 +261,10 @@ impl TemplateScope {
     }
 
     fn binding_expr(&self, binding: &Binding) -> String {
+        if let Some(expr) = &binding.expr {
+            return expr.clone();
+        }
+
         let mut parts = binding.path.split('.');
         let first = parts.next().unwrap_or_default();
         if first == "props" {
@@ -396,16 +400,15 @@ fn conditional_branch_expressions(
 fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String> {
     let mut opts = Vec::new();
     let mut children = element.children.clone();
-
-    if element.tag == "text" {
-        let text_value = text_value_from_children(&children, scope);
-        if text_value.is_some() {
+    let text_value = if element.tag == "text" {
+        let value = text_value_from_children(&children, scope);
+        if value.is_some() {
             children.clear();
         }
-        if let Some(value) = text_value {
-            opts.push(("value".to_owned(), value_source(&value)));
-        }
-    }
+        value
+    } else {
+        None
+    };
 
     for (name, attr) in &element.attrs {
         if name == "class" {
@@ -457,15 +460,19 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
         opts.push((name.clone(), value));
     }
 
+    if let Some(value) = text_value {
+        opts.push(("value".to_owned(), value_source(&value)));
+    }
+
     if !element.events.is_empty() {
         let events = element
             .events
             .iter()
             .map(|(name, binding)| {
                 format!(
-                    "{}: function(evt) {{ return {}(evt); }}",
+                    "{}: {}",
                     identifier_or_string_key(name),
-                    scope.binding_expr(binding)
+                    event_handler_source(binding, scope)
                 )
             })
             .collect::<Vec<_>>()
@@ -481,6 +488,21 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
         &opts,
         &children,
     ))
+}
+
+fn event_handler_source(binding: &Binding, scope: &TemplateScope) -> String {
+    if let Some(expr) = &binding.expr {
+        let trimmed = expr.trim_start();
+        if trimmed.starts_with("function") {
+            return expr.clone();
+        }
+        return format!("function(evt) {{ return ({expr})(evt); }}");
+    }
+
+    format!(
+        "function(evt) {{ return {}(evt); }}",
+        scope.binding_expr(binding)
+    )
 }
 
 fn style_object_expr(
@@ -523,7 +545,29 @@ fn text_value_from_children(children: &[Node], scope: &TemplateScope) -> Option<
         [] => None,
         [Node::Text(text)] => Some(ValueSource::Static(Value::String(text.clone()))),
         [Node::Expression(binding)] => Some(ValueSource::Dynamic(scope.binding_expr(binding))),
-        _ => None,
+        many => {
+            let mut has_dynamic = false;
+            let mut static_text = String::new();
+            let mut parts = Vec::new();
+            for child in many {
+                match child {
+                    Node::Text(text) => {
+                        static_text.push_str(text);
+                        parts.push(json_source(&Value::String(text.clone())));
+                    }
+                    Node::Expression(binding) => {
+                        has_dynamic = true;
+                        parts.push(format!("({})", scope.binding_expr(binding)));
+                    }
+                    _ => return None,
+                }
+            }
+            if has_dynamic {
+                Some(ValueSource::Dynamic(parts.join(" + ")))
+            } else {
+                Some(ValueSource::Static(Value::String(static_text)))
+            }
+        }
     }
 }
 
@@ -745,6 +789,7 @@ mod tests {
                     name: "color".into(),
                     value: StyleSlotValue::Dynamic(Binding {
                         path: "theme.color".into(),
+                        expr: None,
                         is_callable: false,
                     }),
                 },
@@ -809,6 +854,67 @@ mod tests {
     }
 
     #[test]
+    fn emits_styled_dynamic_text_value_after_style_options() {
+        let mut attrs = IndexMap::new();
+        attrs.insert(
+            "class".to_owned(),
+            Attr::Static(Value::String("info-text".into())),
+        );
+        let node = Node::Element(Element {
+            tag: "text".into(),
+            is_component: false,
+            attrs,
+            events: IndexMap::new(),
+            children: vec![
+                Node::Text("已创建组件：".into()),
+                Node::Expression(Binding {
+                    path: "items.length".into(),
+                    expr: None,
+                    is_callable: false,
+                }),
+            ],
+        });
+
+        let js = node_expression(&node, &TemplateScope::default()).unwrap();
+        let class_pos = js.find("classList").expect("classList option");
+        let value_pos = js.find("value").expect("value option");
+        assert!(
+            class_pos < value_pos,
+            "带样式的 text 应先打印样式选项再打印 value，实际：{js}"
+        );
+        assert!(
+            js.contains("value: function() { return \"已创建组件：\" + (_vm_.items.length); }"),
+            "动态文本应下沉为 value 闭包，实际：{js}"
+        );
+    }
+
+    #[test]
+    fn emits_inline_event_handler_expression() {
+        let mut events = IndexMap::new();
+        events.insert(
+            "click".to_owned(),
+            Binding {
+                path: "() => { setCount((prev) => prev + 1); }".into(),
+                expr: Some("function(evt) {\n  _vm_.count = _vm_.count + 1;\n}".into()),
+                is_callable: true,
+            },
+        );
+        let node = Node::Element(Element {
+            tag: "div".into(),
+            is_component: false,
+            attrs: IndexMap::new(),
+            events,
+            children: vec![],
+        });
+
+        let js = node_expression(&node, &TemplateScope::default()).unwrap();
+        assert!(
+            js.contains("events: { click: function(evt) {\n  _vm_.count = _vm_.count + 1;\n} }"),
+            "内联事件函数应直接进入 events 表，实际：{js}"
+        );
+    }
+
+    #[test]
     fn emits_conditional_children_without_block_wrapper() {
         let node = Node::Element(Element {
             tag: "div".into(),
@@ -820,6 +926,7 @@ mod tests {
                     ConditionalBranch {
                         guard: Some(Binding {
                             path: "ready".into(),
+                            expr: None,
                             is_callable: false,
                         }),
                         body: vec![Node::Element(Element {

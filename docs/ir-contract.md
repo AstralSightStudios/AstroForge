@@ -47,6 +47,16 @@ Rsbuild 插件向 Rust 后端传递的契约即 [`astroforge_ir::page::IrDocumen
 // Node::Text
 { "kind": "text", "value": "Hello, Vela!" }
 
+// Node::Expression，`expr` 用于已完成作用域归一的复合表达式
+{
+  "kind": "expression",
+  "value": {
+    "path": "`Hi ${name}`",
+    "expr": "\"Hi \" + (_vm_.name)",
+    "is_callable": false
+  }
+}
+
 // Attr::StyleObject
 {
   "kind": "style_object",

@@ -466,15 +466,22 @@
       ]
     },
     "Binding": {
-      "description": "对视图模型上某个值的引用。\n\n仅记录路径而不记录表达式 AST：下沉阶段只需将 `path` 拼入 `function() { return _vm_.<path>; }` 的字符串模板。响应式追踪仅作用于路 径根段，嵌套字段访问由 JS 成员表达式自然承担。",
+      "description": "对模板求值片段的引用。\n\n`path` 保留最常见的标识符 / 成员访问形态，下沉阶段据此补 `_vm_` 前缀并 处理列表别名。`expr` 用于 TSX 文本模板、三元表达式和内联事件函数等已在 前端阶段完成作用域归一的 JS 片段；该字段必须只由受控 AST 打印生成，不接 收用户源码原样拼接。",
       "type": "object",
       "required": [
         "path"
       ],
       "properties": {
         "path": {
-          "description": "形如 `\"message\"` 或 `\"user.name\"`。",
+          "description": "形如 `\"message\"` 或 `\"user.name\"`；`expr` 存在时仅作为诊断来源。",
           "type": "string"
+        },
+        "expr": {
+          "description": "已归一到 Vela 模板作用域的 JS 表达式片段。",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "is_callable": {
           "description": "是否指向函数。`true` 时下沉为 `function(evt) { return _vm_.<path>(evt) }`；`false` 时按值读取。",

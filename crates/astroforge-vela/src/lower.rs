@@ -6,6 +6,7 @@
 //! `RuntimeNode`。普通元素、事件、样式和脚本对象在此阶段完成归类。
 
 use anyhow::{Context, Result};
+use astroforge_ir::component::{Attr, Binding, Node, StyleSlotValue};
 use astroforge_ir::page::{
     AppModule, Component, IrDocument, Manifest, Page, Script, Selector, StyleRule, StyleTable,
 };
@@ -95,7 +96,7 @@ fn lower_page(page: &Page, component_name: &str) -> Result<LoweredPage> {
     Ok(LoweredPage {
         route: page.route.clone(),
         component: component_name.to_owned(),
-        system_requires: detect_system_requires(&script_object),
+        system_requires: detect_system_requires_for_template(&script_object, &page.template),
         script_object,
         style_table: lower_style_table(&page.style),
         component_imports: page.imports.clone(),
@@ -106,7 +107,7 @@ fn lower_component(component: &Component) -> Result<LoweredComponent> {
     let script_object = script_object(&component.script);
     Ok(LoweredComponent {
         name: component.name.clone(),
-        system_requires: detect_system_requires(&script_object),
+        system_requires: detect_system_requires_for_template(&script_object, &component.template),
         script_object,
         style_table: lower_style_table(&component.style),
     })
@@ -245,6 +246,72 @@ fn detect_system_requires(source: &str) -> Vec<SystemRequire> {
     }
     out.extend(detect_network_requires(source));
     out
+}
+
+fn detect_system_requires_for_template(
+    script_object: &str,
+    template: &[Node],
+) -> Vec<SystemRequire> {
+    let mut source = script_object.to_owned();
+    collect_template_binding_sources(template, &mut source);
+    detect_system_requires(&source)
+}
+
+fn collect_template_binding_sources(nodes: &[Node], out: &mut String) {
+    for node in nodes {
+        match node {
+            Node::Element(element) => {
+                for attr in element.attrs.values() {
+                    collect_attr_binding_sources(attr, out);
+                }
+                for binding in element.events.values() {
+                    collect_binding_source(binding, out);
+                }
+                collect_template_binding_sources(&element.children, out);
+            }
+            Node::Expression(binding) => collect_binding_source(binding, out),
+            Node::Conditional(conditional) => {
+                for branch in &conditional.branches {
+                    if let Some(binding) = &branch.guard {
+                        collect_binding_source(binding, out);
+                    }
+                    collect_template_binding_sources(&branch.body, out);
+                }
+            }
+            Node::List(list) => {
+                collect_binding_source(&list.source, out);
+                if let Some(binding) = &list.key {
+                    collect_binding_source(binding, out);
+                }
+                collect_template_binding_sources(&list.body, out);
+            }
+            Node::Fragment(children) => collect_template_binding_sources(children, out),
+            Node::Text(_) => {}
+        }
+    }
+}
+
+fn collect_attr_binding_sources(attr: &Attr, out: &mut String) {
+    match attr {
+        Attr::Dynamic(binding) => collect_binding_source(binding, out),
+        Attr::StyleObject(slots) => {
+            for slot in slots {
+                if let StyleSlotValue::Dynamic(binding) = &slot.value {
+                    collect_binding_source(binding, out);
+                }
+            }
+        }
+        Attr::Static(_) => {}
+    }
+}
+
+fn collect_binding_source(binding: &Binding, out: &mut String) {
+    out.push(' ');
+    if let Some(expr) = &binding.expr {
+        out.push_str(expr);
+    } else {
+        out.push_str(&binding.path);
+    }
 }
 
 fn detect_network_requires(source: &str) -> Vec<SystemRequire> {
@@ -623,6 +690,25 @@ mod tests {
                 .map(|item| (item.local, item.module))
                 .collect::<Vec<_>>(),
             vec![("router", "system.router"), ("storage", "system.storage")]
+        );
+    }
+
+    #[test]
+    fn detects_system_requires_from_template_bindings() {
+        let requires = detect_system_requires_for_template(
+            "{}",
+            &[Node::Expression(Binding {
+                path: "() => router.push({ uri: 'pages/detail' })".into(),
+                expr: Some("function(evt) { return router.push({ uri: 'pages/detail' }); }".into()),
+                is_callable: true,
+            })],
+        );
+        assert_eq!(
+            requires
+                .iter()
+                .map(|item| (item.local, item.module))
+                .collect::<Vec<_>>(),
+            vec![("router", "system.router")]
         );
     }
 
