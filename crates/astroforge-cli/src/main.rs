@@ -231,9 +231,11 @@ fn run_init(path: &camino::Utf8Path) -> Result<()> {
         &path.join("rsbuild.config.ts"),
         include_str!("templates/rsbuild.config.ts"),
     )?;
-    write_new_file(
+    upsert_package_json(
         &path.join("package.json"),
-        &include_str!("templates/package.json").replace("{NAME}", &default_name),
+        &include_str!("templates/package.json")
+            .replace("{NAME}", &default_name)
+            .replace("{ASTROFORGE_VERSION}", env!("CARGO_PKG_VERSION")),
     )?;
     write_new_file(
         &path.join("tsconfig.json"),
@@ -252,6 +254,103 @@ fn run_init(path: &camino::Utf8Path) -> Result<()> {
     println!("  pnpm exec astroforge build --target vela");
     println!("  pnpm exec astroforge dev   # 监听源码变更，增量打 rpk");
     Ok(())
+}
+
+/// 写入 package.json：不存在时写模板，已存在则做字段级 merge。
+///
+/// merge 策略（避免覆盖用户 / pnpm add 已写入的内容）：
+/// - 顶层标量字段（name / version / private / type 等）：仅在缺失时填入模板默认值；
+/// - `scripts` / `dependencies` / `devDependencies` 等 dep 表：逐 key 比对，
+///   缺失的补上，已存在的保留原值（包括用户的 version 指定）；
+/// - 其它已存在的顶层字段原样保留。
+///
+/// 设计动机见 README「常见安装路径」：用户可能先 `pnpm add -D
+/// @astralsight/astroforge` 让 pnpm 写出一个仅含 astroforge 的 package.json，
+/// 然后再 `astroforge init`——旧实现 `write_new_file` 见文件存在就静默跳过，
+/// 导致后续 `pnpm install` 拉不到 core / rsbuild-plugin / @rsbuild/core 等
+/// 必备依赖，整条链路失效。本函数确保两种顺序都能产出可用的 package.json。
+fn upsert_package_json(path: &camino::Utf8Path, template: &str) -> Result<()> {
+    use serde_json::Value;
+
+    let template_value: Value = serde_json::from_str(template)
+        .with_context(|| "内置 package.json 模板解析失败（编译期 bug）")?;
+
+    if !path.exists() {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| format!("创建目录失败：{parent}"))?;
+        }
+        fs::write(path, template).with_context(|| format!("写入 package.json 失败：{path}"))?;
+        println!("  + 创建 package.json");
+        return Ok(());
+    }
+
+    let existing_source =
+        fs::read_to_string(path).with_context(|| format!("读取已有 package.json 失败：{path}"))?;
+    let mut existing: Value = serde_json::from_str(&existing_source)
+        .with_context(|| format!("已有 package.json 不是合法 JSON：{path}"))?;
+
+    let added = merge_package_json(&mut existing, &template_value);
+    let serialized =
+        serde_json::to_string_pretty(&existing).context("合并后的 package.json 序列化失败")?;
+    let mut out = serialized;
+    out.push('\n');
+    fs::write(path, out).with_context(|| format!("写回 package.json 失败：{path}"))?;
+
+    if added.is_empty() {
+        println!("  · package.json 已具备所有必需字段，未改动");
+    } else {
+        println!("  ~ package.json 合并字段：{}", added.join(", "));
+    }
+    Ok(())
+}
+
+/// 把模板 package.json 的字段合并到已有 package.json，**不覆盖**用户已声明的值。
+/// 返回新增的字段路径（如 `scripts.build`、`dependencies.@astralsight/astroforge-core`），
+/// 调用方据此打印改动摘要。
+fn merge_package_json(
+    existing: &mut serde_json::Value,
+    template: &serde_json::Value,
+) -> Vec<String> {
+    use serde_json::Value;
+
+    const DEP_LIKE_KEYS: &[&str] = &[
+        "scripts",
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+        "optionalDependencies",
+    ];
+
+    let mut added: Vec<String> = Vec::new();
+    let (Some(existing_obj), Some(template_obj)) = (existing.as_object_mut(), template.as_object())
+    else {
+        return added;
+    };
+
+    for (key, template_value) in template_obj {
+        if DEP_LIKE_KEYS.contains(&key.as_str()) {
+            let entry = existing_obj
+                .entry(key.clone())
+                .or_insert_with(|| Value::Object(serde_json::Map::new()));
+            let Some(existing_map) = entry.as_object_mut() else {
+                continue;
+            };
+            let Some(template_map) = template_value.as_object() else {
+                continue;
+            };
+            for (sub_key, sub_value) in template_map {
+                if !existing_map.contains_key(sub_key) {
+                    existing_map.insert(sub_key.clone(), sub_value.clone());
+                    added.push(format!("{key}.{sub_key}"));
+                }
+            }
+        } else if !existing_obj.contains_key(key) {
+            existing_obj.insert(key.clone(), template_value.clone());
+            added.push(key.clone());
+        }
+    }
+
+    added
 }
 
 /// `astroforge dev` 实现：把 TSX→IR（Rsbuild 插件）与 IR→rpk（Rust 后端）
@@ -628,4 +727,99 @@ fn write_new_file(path: &camino::Utf8Path, content: &str) -> Result<()> {
     }
     fs::write(path, content).with_context(|| format!("写入文件失败：{path}"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn merge_package_json_preserves_existing_and_fills_missing() {
+        // 模拟 `pnpm add -D @astralsight/astroforge` 写出的最小 package.json，
+        // 然后 `astroforge init` 在其上合并模板必备字段。
+        let mut existing = json!({
+            "name": "user-watch-app",
+            "devDependencies": {
+                "@astralsight/astroforge": "^0.0.2",
+                "some-other-dev-tool": "^1.0.0"
+            }
+        });
+
+        let template = json!({
+            "name": "astroforge-app",
+            "version": "0.1.0",
+            "private": true,
+            "type": "module",
+            "scripts": {
+                "build": "astroforge build --target vela",
+                "dev": "astroforge dev"
+            },
+            "dependencies": {
+                "@astralsight/astroforge-core": "^0.0.2",
+                "@astralsight/astroforge-rsbuild-plugin": "^0.0.2"
+            },
+            "devDependencies": {
+                "@rsbuild/core": "^2.0.0",
+                "@astralsight/astroforge": "^0.0.2",
+                "typescript": "^5.0.0"
+            }
+        });
+
+        let added = merge_package_json(&mut existing, &template);
+
+        // 用户已写的 name 不被覆盖。
+        assert_eq!(existing["name"], "user-watch-app");
+        // 顶层缺失字段被补齐。
+        assert_eq!(existing["version"], "0.1.0");
+        assert_eq!(existing["private"], true);
+        assert_eq!(existing["type"], "module");
+        // dependencies 子表整段被加入（原 existing 没有 dependencies 键）。
+        assert_eq!(
+            existing["dependencies"]["@astralsight/astroforge-core"],
+            "^0.0.2"
+        );
+        // devDependencies 增量合并，用户的 astroforge / some-other-dev-tool 原样保留。
+        assert_eq!(
+            existing["devDependencies"]["@astralsight/astroforge"],
+            "^0.0.2"
+        );
+        assert_eq!(existing["devDependencies"]["some-other-dev-tool"], "^1.0.0");
+        assert_eq!(existing["devDependencies"]["typescript"], "^5.0.0");
+        assert_eq!(existing["devDependencies"]["@rsbuild/core"], "^2.0.0");
+        // scripts 整段加入。
+        assert_eq!(
+            existing["scripts"]["build"],
+            "astroforge build --target vela"
+        );
+
+        // 摘要里至少要包含新增的几个关键字段。
+        let added_set: std::collections::HashSet<_> = added.iter().map(String::as_str).collect();
+        assert!(added_set.contains("version"));
+        assert!(added_set.contains("scripts.build"));
+        assert!(added_set.contains("dependencies.@astralsight/astroforge-core"));
+        assert!(added_set.contains("devDependencies.typescript"));
+        // 用户已存在的 key 不应出现在改动摘要里。
+        assert!(!added_set.contains("name"));
+        assert!(!added_set.contains("devDependencies.@astralsight/astroforge"));
+    }
+
+    #[test]
+    fn merge_package_json_no_op_when_existing_has_everything() {
+        let mut existing = json!({
+            "name": "x",
+            "scripts": { "build": "echo done" },
+            "dependencies": { "a": "^1" }
+        });
+        let template = json!({
+            "name": "y",
+            "scripts": { "build": "should-not-overwrite" },
+            "dependencies": { "a": "^99" }
+        });
+        let added = merge_package_json(&mut existing, &template);
+        assert!(added.is_empty(), "expected no-op, got: {added:?}");
+        assert_eq!(existing["name"], "x");
+        assert_eq!(existing["scripts"]["build"], "echo done");
+        assert_eq!(existing["dependencies"]["a"], "^1");
+    }
 }

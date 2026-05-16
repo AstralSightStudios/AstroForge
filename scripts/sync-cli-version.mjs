@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// 把 6 个 @astralsight/astroforge-cli-* 平台子包 + 主包 astroforge 的 package.json version
-// 同步到 argv[2] 指定的语义化版本号；同步更新主包 optionalDependencies 里对
-// 各子包的版本固定为同一值。
+// 把 6 个 @astralsight/astroforge-cli-* 平台子包 + 主包 astroforge 的
+// package.json version 同步到 argv[2] 指定的语义化版本号；同步更新主包
+// optionalDependencies 里对各子包的版本 pin 到同一值；同步 Cargo.toml
+// workspace.package.version，让 `cargo build` 产出的 Rust 二进制 `--version`
+// 与 npm 包版本一致（否则消费端 `astroforge --version` 与 npm 包页号脱钩）。
 //
-// 主要给 .github/workflows/release-cli.yml 在发布前调用，确保六个 tarball 的
-// version 与主包对子包的 pin 一致。本地手动调试也可以直接执行：
+// 主要给 .github/workflows/release-cli.yml 在发布前调用，确保 6 个 tarball
+// 的 version、主包对子包的 pin、binary 自报版本三者完全一致。本地手动调试也
+// 可以直接执行：
 //   node scripts/sync-cli-version.mjs 0.0.2
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -57,10 +60,32 @@ for (const dir of SUBPACKAGES) {
 writeJson(mainPath, main);
 console.log(`  ${main.name} -> ${version} (+ optionalDependencies pin)`);
 
+// Cargo.toml workspace.package.version：astroforge-cli crate 的 CARGO_PKG_VERSION
+// 取自该字段；不同步会导致 `astroforge --version` 与 npm 包号脱钩。
+const cargoTomlPath = resolve(repoRoot, "Cargo.toml");
+const cargoToml = readFileSync(cargoTomlPath, "utf8");
+const cargoTomlNext = updateCargoWorkspaceVersion(cargoToml, version);
+if (cargoTomlNext === cargoToml) {
+  console.log(`  Cargo.toml -> ${version}（已是该版本，未改动）`);
+} else {
+  writeFileSync(cargoTomlPath, cargoTomlNext);
+  console.log(`  Cargo.toml workspace.package.version -> ${version}`);
+}
+
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
 function writeJson(path, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+/// 替换 `[workspace.package] ... version = "x.y.z"` 中的版本号；只动 workspace
+/// 段，避免误改 `[workspace.dependencies]` 里的依赖版本。
+function updateCargoWorkspaceVersion(source, nextVersion) {
+  const sectionRe = /(\[workspace\.package\][^\[]*?\bversion\s*=\s*")[^"]*(")/;
+  if (!sectionRe.test(source)) {
+    throw new Error("Cargo.toml 中未找到 [workspace.package] version 字段");
+  }
+  return source.replace(sectionRe, `$1${nextVersion}$2`);
 }

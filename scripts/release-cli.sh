@@ -33,10 +33,10 @@ usage() {
   exit 1
 }
 
-[[ -z "$VERSION" || "$VERSION" == "--help" || "$VERSION" == "-h" ]] && usage
+[[ -z "${VERSION}" || "${VERSION}" == "--help" || "${VERSION}" == "-h" ]] && usage
 
-if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-  echo "::error:: '$VERSION' 不符合 semver"
+if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+  echo "::error:: '${VERSION}' 不符合 semver"
   exit 1
 fi
 
@@ -59,15 +59,15 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-TAG="cli-v$VERSION"
+TAG="cli-v${VERSION}"
 
 if git rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
   echo "::error:: tag '$TAG' 已存在；先 git tag -d $TAG 再重跑，或换 version"
   exit 1
 fi
 
-echo "→ 同步版本到 $VERSION"
-node scripts/sync-cli-version.mjs "$VERSION"
+echo "→ 同步版本到 ${VERSION}"
+node scripts/sync-cli-version.mjs "${VERSION}"
 
 if [[ "$SKIP_TESTS" != "true" ]]; then
   echo "→ pnpm check:js"
@@ -101,9 +101,9 @@ if git diff --cached --quiet; then
 fi
 
 echo "→ git commit"
-git commit -m "chore(cli): release v$VERSION
+git commit -m "chore(cli): release v${VERSION}
 
-Bump @astralsight/astroforge + 6 个平台子包到 $VERSION。push tag cli-v$VERSION
+Bump @astralsight/astroforge + 6 个平台子包到 ${VERSION}。push tag cli-v${VERSION}
 会触发 release-cli.yml 多平台矩阵构建并发布至 npm（OIDC trusted publishing）。"
 
 echo "→ git tag $TAG"

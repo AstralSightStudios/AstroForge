@@ -10,12 +10,12 @@
     "inspect": "astroforge inspect rpk dist/*.debug.rpk"
   },
   "dependencies": {
-    "@astralsight/astroforge-core": "*",
-    "@astralsight/astroforge-rsbuild-plugin": "*"
+    "@astralsight/astroforge-core": "^{ASTROFORGE_VERSION}",
+    "@astralsight/astroforge-rsbuild-plugin": "^{ASTROFORGE_VERSION}"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.0",
-    "@astralsight/astroforge": "*",
+    "@astralsight/astroforge": "^{ASTROFORGE_VERSION}",
     "typescript": "^5.0.0"
   }
 }
