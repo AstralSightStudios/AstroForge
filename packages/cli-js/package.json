@@ -1,7 +1,7 @@
 {
   "name": "@astralsight/astroforge",
   "version": "0.0.2",
-  "description": "AstroForge CLI — React/TSX Smartwatch Quick App Toolchain",
+  "description": "AstroForge — a Rust-powered toolchain for smartwatch quick apps with React-like development.",
   "license": "MIT",
   "repository": {
     "type": "git",
