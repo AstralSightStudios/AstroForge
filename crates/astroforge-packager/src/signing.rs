@@ -85,12 +85,10 @@ impl PackageSigner {
     ///      内置 debug 证书签 release 包）。
     pub(crate) fn discover(config: &SigningConfig) -> Result<Self> {
         if let Some((private_path, certificate_path)) = env_signing_pair()? {
-            let private_pem = fs::read_to_string(&private_path).with_context(|| {
-                format!("读取 Vela 私钥失败：{}", private_path.display())
-            })?;
-            let certificate_pem = fs::read_to_string(&certificate_path).with_context(|| {
-                format!("读取 Vela 证书失败：{}", certificate_path.display())
-            })?;
+            let private_pem = fs::read_to_string(&private_path)
+                .with_context(|| format!("读取 Vela 私钥失败：{}", private_path.display()))?;
+            let certificate_pem = fs::read_to_string(&certificate_path)
+                .with_context(|| format!("读取 Vela 证书失败：{}", certificate_path.display()))?;
             return Self::from_pem(
                 &private_pem,
                 &certificate_pem,
@@ -104,19 +102,13 @@ impl PackageSigner {
         if let Some(sign_root) = config.sign_root() {
             for candidate in project_candidates(&sign_root, config.mode) {
                 if candidate.private_key.exists() && candidate.certificate.exists() {
-                    let private_pem = fs::read_to_string(&candidate.private_key)
-                        .with_context(|| {
-                            format!(
-                                "读取项目签名私钥失败：{}",
-                                candidate.private_key.display()
-                            )
+                    let private_pem =
+                        fs::read_to_string(&candidate.private_key).with_context(|| {
+                            format!("读取项目签名私钥失败：{}", candidate.private_key.display())
                         })?;
-                    let certificate_pem = fs::read_to_string(&candidate.certificate)
-                        .with_context(|| {
-                            format!(
-                                "读取项目签名证书失败：{}",
-                                candidate.certificate.display()
-                            )
+                    let certificate_pem =
+                        fs::read_to_string(&candidate.certificate).with_context(|| {
+                            format!("读取项目签名证书失败：{}", candidate.certificate.display())
                         })?;
                     return Self::from_pem(
                         &private_pem,
@@ -163,11 +155,7 @@ impl PackageSigner {
         self.private_key.size() * 8
     }
 
-    fn from_pem(
-        private_pem: &str,
-        certificate_pem: &str,
-        source: SigningSource,
-    ) -> Result<Self> {
+    fn from_pem(private_pem: &str, certificate_pem: &str, source: SigningSource) -> Result<Self> {
         let private_key = match RsaPrivateKey::from_pkcs1_pem(private_pem) {
             Ok(private_key) => private_key,
             Err(_) => {
@@ -199,9 +187,7 @@ fn env_signing_pair() -> Result<Option<(PathBuf, PathBuf)>> {
     match (env::var_os(ENV_PRIVATE_KEY), env::var_os(ENV_CERTIFICATE)) {
         (Some(private), Some(certificate)) => Ok(Some((private.into(), certificate.into()))),
         (None, None) => Ok(None),
-        _ => anyhow::bail!(
-            "{ENV_PRIVATE_KEY} 与 {ENV_CERTIFICATE} 必须同时设置",
-        ),
+        _ => anyhow::bail!("{ENV_PRIVATE_KEY} 与 {ENV_CERTIFICATE} 必须同时设置",),
     }
 }
 

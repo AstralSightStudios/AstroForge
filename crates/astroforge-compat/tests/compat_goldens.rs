@@ -19,10 +19,7 @@ use astroforge_compat::runner::{SummaryComparison, compare_summaries_only};
 fn all_fixtures_have_zero_summary_diffs() {
     let fixtures_root = workspace_root().join("fixtures");
     let fixtures = discover_fixtures(&fixtures_root);
-    assert!(
-        !fixtures.is_empty(),
-        "未发现任何 fixture：{fixtures_root}"
-    );
+    assert!(!fixtures.is_empty(), "未发现任何 fixture：{fixtures_root}");
 
     let mut failures = Vec::new();
     for fixture in &fixtures {
@@ -74,8 +71,7 @@ fn all_fixtures_have_zero_summary_diffs() {
 }
 
 fn workspace_root() -> Utf8PathBuf {
-    let manifest_dir =
-        Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest_dir = Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     manifest_dir
         .parent()
         .and_then(|p| p.parent())

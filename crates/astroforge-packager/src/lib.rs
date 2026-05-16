@@ -962,7 +962,10 @@ mod tests {
         })
         .unwrap_err();
         let msg = format!("{err:?}");
-        assert!(msg.contains("release"), "错误信息应说明缺失 release 材料：{msg}");
+        assert!(
+            msg.contains("release"),
+            "错误信息应说明缺失 release 材料：{msg}"
+        );
     }
 
     #[test]

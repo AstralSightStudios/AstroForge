@@ -53,6 +53,60 @@ describe("TSX extraction", () => {
     });
   });
 
+  it("extracts inline object style as a static JSON value", () => {
+    const page = extractPageFromTsx(
+      `
+        import { Text, View } from '@astroforge/core';
+        export default function Page() {
+          return (
+            <View style={{ color: 'red', fontSize: 16, padding: -8 }}>
+              <Text style={{ fontWeight: 'bold' }}>x</Text>
+            </View>
+          );
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.template[0]).toMatchObject({
+      kind: "element",
+      value: {
+        attrs: {
+          style: {
+            kind: "static",
+            value: { color: "red", fontSize: 16, padding: -8 },
+          },
+        },
+      },
+    });
+    expect((page.template[0] as any).value.children[0]).toMatchObject({
+      kind: "element",
+      value: {
+        tag: "text",
+        attrs: {
+          style: { kind: "static", value: { fontWeight: "bold" } },
+        },
+      },
+    });
+  });
+
+  it("accepts static array literal attributes (classList-style)", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View } from '@astroforge/core';
+        export default function Page() {
+          return <View data-tags={["primary", "card"]} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect((page.template[0] as any).value.attrs["data-tags"]).toEqual({
+      kind: "static",
+      value: ["primary", "card"],
+    });
+  });
+
   it("normalizes static attributes and event bindings", () => {
     const page = extractPageFromTsx(
       `

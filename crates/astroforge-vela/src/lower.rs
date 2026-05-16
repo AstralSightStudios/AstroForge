@@ -404,13 +404,13 @@ mod tests {
         let min_api_pos = json
             .find("\"minAPILevel\"")
             .expect("minAPILevel field present");
-        assert!(
-            min_api_pos > router_pos,
-            "minAPILevel 应在 router 之后追加"
-        );
+        assert!(min_api_pos > router_pos, "minAPILevel 应在 router 之后追加");
 
         let devices = lower_device_manifests(&manifest).unwrap();
-        assert_eq!(devices.keys().collect::<Vec<_>>(), vec![&"watch".to_owned()]);
+        assert_eq!(
+            devices.keys().collect::<Vec<_>>(),
+            vec![&"watch".to_owned()]
+        );
         let watch = devices.get("watch").unwrap();
         assert!(!watch.contains("\"minAPILevel\""));
         assert!(!watch.contains("\"packageInfo\""));

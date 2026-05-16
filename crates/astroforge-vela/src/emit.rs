@@ -614,7 +614,38 @@ fn indent_lines(input: &str, spaces: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use astroforge_ir::component::{Binding, Conditional, ConditionalBranch, Element, Node};
+    use astroforge_ir::component::{Attr, Binding, Conditional, ConditionalBranch, Element, Node};
+    use serde_json::json;
+
+    #[test]
+    fn emits_inline_object_style_without_translate_style() {
+        // JSX `<div style={{ color: "red", fontSize: 16 }} />` 到 IR 的形态：
+        // `style` 属性是 `Attr::Static`，值为 JSON 对象。Vela 后端应直接把
+        // 对象内嵌到 __opts__.style，不触发 $translateStyle$（后者只对字符串
+        // 形态的样式做 kebab→camel 解析）。
+        let mut attrs = IndexMap::new();
+        attrs.insert(
+            "style".to_owned(),
+            Attr::Static(json!({ "color": "red", "fontSize": 16 })),
+        );
+        let node = Node::Element(Element {
+            tag: "div".into(),
+            is_component: false,
+            attrs,
+            events: IndexMap::new(),
+            children: vec![],
+        });
+
+        let js = node_expression(&node, &TemplateScope::default()).unwrap();
+        assert!(
+            js.contains("style: {\"color\":\"red\",\"fontSize\":16}"),
+            "应原样输出静态 style 对象，实际：{js}"
+        );
+        assert!(
+            !js.contains("$translateStyle$"),
+            "静态对象 style 不应包装在 $translateStyle$ 调用中"
+        );
+    }
 
     #[test]
     fn emits_static_text_element_value() {

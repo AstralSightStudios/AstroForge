@@ -239,7 +239,10 @@ fn run_init(path: &camino::Utf8Path) -> Result<()> {
         &path.join("tsconfig.json"),
         include_str!("templates/tsconfig.json"),
     )?;
-    write_new_file(&path.join(".gitignore"), include_str!("templates/gitignore"))?;
+    write_new_file(
+        &path.join(".gitignore"),
+        include_str!("templates/gitignore"),
+    )?;
     write_new_file(&path.join("README.md"), include_str!("templates/README.md"))?;
 
     println!("AstroForge 项目已创建：{path}");
@@ -313,9 +316,8 @@ fn run_dev(root: &camino::Utf8Path, install: bool, no_rsbuild: bool) -> Result<(
 
     let result = (|| -> Result<()> {
         for events in rx {
-            let events = events.map_err(|errors| {
-                anyhow::anyhow!("notify-debouncer 错误：{:?}", errors)
-            })?;
+            let events =
+                events.map_err(|errors| anyhow::anyhow!("notify-debouncer 错误：{:?}", errors))?;
             if !events.iter().any(|evt| {
                 evt.paths.iter().any(|p| {
                     p.file_name()
@@ -344,11 +346,7 @@ fn run_dev(root: &camino::Utf8Path, install: bool, no_rsbuild: bool) -> Result<(
     result
 }
 
-fn rebuild_once(
-    root: &camino::Utf8Path,
-    ir_path: &camino::Utf8Path,
-    install: bool,
-) -> Result<()> {
+fn rebuild_once(root: &camino::Utf8Path, ir_path: &camino::Utf8Path, install: bool) -> Result<()> {
     let doc = astroforge_ir::io::load_ir_from_path(ir_path)
         .with_context(|| format!("加载 IR 失败：{ir_path}"))?;
     let build = astroforge_vela::build(doc).context("Vela backend 构建失败")?;
@@ -362,9 +360,8 @@ fn rebuild_once(
     let pack_options = astroforge_packager::PackOptions {
         signing: signing_config_for("debug", root),
     };
-    let unpacked_files =
-        astroforge_packager::write_unpacked_with(&build, &unpacked, &pack_options)
-            .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
+    let unpacked_files = astroforge_packager::write_unpacked_with(&build, &unpacked, &pack_options)
+        .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
     let report = astroforge_packager::pack_with(&build, &out_path, &pack_options)
         .with_context(|| format!("打包 rpk 失败：{out_path}"))?;
     println!(
@@ -423,9 +420,8 @@ fn run_build(
     let pack_options = astroforge_packager::PackOptions {
         signing: signing_config_for(profile, root),
     };
-    let unpacked_files =
-        astroforge_packager::write_unpacked_with(&build, &unpacked, &pack_options)
-            .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
+    let unpacked_files = astroforge_packager::write_unpacked_with(&build, &unpacked, &pack_options)
+        .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
     let report = astroforge_packager::pack_with(&build, &out_path, &pack_options)
         .with_context(|| format!("打包 rpk 失败：{out_path}"))?;
 
@@ -435,9 +431,7 @@ fn run_build(
     println!("  unpacked files: {}", unpacked_files.len());
     println!(
         "  signing: {} (pubkey={}…, RSA-{})",
-        report.signing.source,
-        report.signing.public_key_fingerprint,
-        report.signing.modulus_bits
+        report.signing.source, report.signing.public_key_fingerprint, report.signing.modulus_bits
     );
     Ok(())
 }
@@ -587,7 +581,10 @@ fn inspect_rpk(path: &camino::Utf8Path) -> Result<()> {
     }
 
     println!("签名:");
-    println!("  outer sig block: {}", yes_no(info.signature.outer_present));
+    println!(
+        "  outer sig block: {}",
+        yes_no(info.signature.outer_present)
+    );
     println!(
         "  META-INF/CERT:   {} (内层 sig block: {})",
         yes_no(info.signature.cert_present),

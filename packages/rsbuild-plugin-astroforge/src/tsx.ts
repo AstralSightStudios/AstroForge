@@ -1303,10 +1303,87 @@ function attrFromValue(value: any, filename?: string): Attr {
     return { kind: "static", value: literal };
   }
 
+  // 静态对象 / 数组字面量（如内联 style: `style={{ color: 'red', fontSize: 16 }}`、
+  // 静态 classList、props 默认数据等）。所有叶子节点必须是字面量；含动态成员
+  // 则交由下面 bindingFromExpression 路径处理（标识符 / 成员表达式可作为
+  // 整体动态绑定）。若是无法表示为静态 JSON 又非纯绑定的混合形态，
+  // `staticAttrLiteral` 返回 `undefined`，再由 bindingFromExpression 抛出可读
+  // 的错误信息。
+  const staticObject = staticAttrLiteral(expression);
+  if (staticObject !== undefined) {
+    return { kind: "static", value: staticObject };
+  }
+
   return {
     kind: "dynamic",
     value: bindingFromExpression(expression, false, filename),
   };
+}
+
+/// 尝试把表达式整体解析为静态 JSON 字面量。
+///
+/// 支持的形态：
+/// - 基本字面量（与 `literalValue` 一致）；
+/// - `[ ... ]` 元素全为静态值（递归）；
+/// - `{ ... }` 属性键为标识符 / 字符串字面量、值递归静态；
+/// - 一元 `-` 前缀的数值字面量。
+///
+/// 不支持：含计算键 / spread / 方法 / getter / 动态值的对象数组——返回
+/// `undefined`，让上层选择 dynamic binding 或抛错。
+function staticAttrLiteral(expression: any): JsonValue | undefined {
+  const node = unwrapExpression(expression);
+  const literal = literalValue(node);
+  if (literal !== undefined) {
+    return literal;
+  }
+
+  if (
+    node.type === "UnaryExpression" &&
+    node.operator === "-" &&
+    unwrapExpression(node.argument).type === "NumericLiteral"
+  ) {
+    return -unwrapExpression(node.argument).value;
+  }
+
+  if (node.type === "ArrayExpression") {
+    const out: JsonValue[] = [];
+    for (const element of node.elements) {
+      if (!element) {
+        out.push(null);
+        continue;
+      }
+      if (element.type === "SpreadElement") return undefined;
+      const item = staticAttrLiteral(element);
+      if (item === undefined) return undefined;
+      out.push(item);
+    }
+    return out;
+  }
+
+  if (node.type === "ObjectExpression") {
+    const out: Record<string, JsonValue> = {};
+    for (const property of node.properties) {
+      if (property.type !== "ObjectProperty") return undefined;
+      if (property.computed) return undefined;
+      let key: string;
+      if (property.key.type === "Identifier") {
+        key = property.key.name;
+      } else if (
+        property.key.type === "StringLiteral" ||
+        property.key.type === "NumericLiteral"
+      ) {
+        key = String(property.key.value);
+      } else {
+        return undefined;
+      }
+      const v = staticAttrLiteral(property.value);
+      if (v === undefined) return undefined;
+      out[key] = v;
+    }
+    return out;
+  }
+
+  return undefined;
 }
 
 function bindingFromAttribute(
