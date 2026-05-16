@@ -45,6 +45,12 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # 强制让所有 JS-based actions 跑在 Node 24 上。GitHub Actions 已宣告 Node 20
+  # 在 2026-06-02 默认升至 Node 24、2026-09-16 彻底移除（changelog：
+  # https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/）。
+  # 已用的 actions 都升到 v5/v6 显式带 Node 24 的版本，这里再额外把开关打开作
+  # 为兜底，免得其它过渡期的子 action 因为没升级而抛 deprecation warning。
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   resolve-version:
@@ -54,7 +60,7 @@ jobs:
       version: ${{ steps.pick.outputs.version }}
       dry_run: ${{ steps.pick.outputs.dry_run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: pick
         shell: bash
         run: |
@@ -84,11 +90,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-26
             target: aarch64-apple-darwin
             pkg: cli-darwin-arm64
             exe: astroforge
-          - os: macos-13
+          - os: macos-26-intel
             target: x86_64-apple-darwin
             pkg: cli-darwin-x64
             exe: astroforge
@@ -110,7 +116,7 @@ jobs:
             exe: astroforge.exe
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -146,7 +152,7 @@ jobs:
           "$dest" --version
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.pkg }}
           path: packages/${{ matrix.pkg }}/bin/${{ matrix.exe }}
@@ -166,11 +172,11 @@ jobs:
       VERSION: ${{ needs.resolve-version.outputs.version }}
       DRY_RUN: ${{ needs.resolve-version.outputs.dry_run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org/"
 
       - name: Ensure npm ≥ 11.5.0 (trusted publishing 支持线)
@@ -180,7 +186,7 @@ jobs:
           npm --version
 
       - name: Download all platform artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
