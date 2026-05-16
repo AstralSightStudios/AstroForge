@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AstroForge rpk 装配与签名。"
+description = "AstroForge rpk packing and signing"
 
 [dependencies]
 astroforge-ir = { workspace = true }

@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AstroForge Vela 后端：Page IR 下沉为 Runtime IR，并打印为 Vela 兼容 JS。"
+description = "AstroForge Vela Backend"
 
 [dependencies]
 astroforge-ir = { workspace = true }

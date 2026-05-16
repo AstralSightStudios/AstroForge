@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AstroForge 设备工具集：adb 桥接、应用安装、日志流。"
+description = "AstroForge Device toolkit"
 
 [dependencies]
 anyhow = { workspace = true }

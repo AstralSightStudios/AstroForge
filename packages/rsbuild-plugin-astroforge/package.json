@@ -1,18 +1,47 @@
 {
   "name": "@astroforge/rsbuild-plugin",
   "version": "0.0.1",
-  "description": "AstroForge 的 Rsbuild 插件：采集页面、转换 TSX、生成 IR、调用 Rust 后端。",
-  "license": "ISC",
+  "description": "AstroForge Plugin for RsBuild",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AstralSightStudios/AstroForge.git",
+    "directory": "packages/rsbuild-plugin-astroforge"
+  },
+  "homepage": "https://github.com/AstralSightStudios/AstroForge#readme",
+  "bugs": {
+    "url": "https://github.com/AstralSightStudios/AstroForge/issues"
+  },
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "tsdown"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.18"
   },
   "peerDependencies": {
     "@rsbuild/core": ">=1.0.0"
   },
   "dependencies": {
-    "@astroforge/core": "workspace:*",
+    "@astroforge/core": "workspace:^",
     "@babel/parser": "^7.29.3"
   }
 }

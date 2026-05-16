@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AstroForge CLI 入口（`astroforge` 可执行文件）。"
+description = "AstroForge CLI Entry"
 
 [[bin]]
 name = "astroforge"

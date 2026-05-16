@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AstroForge 兼容性测试：与 aiot-toolkit 产物的 AST / 运行时调用对照。"
+description = "AstroForge Compatibility testing components"
 
 [dependencies]
 astroforge-ir = { workspace = true }

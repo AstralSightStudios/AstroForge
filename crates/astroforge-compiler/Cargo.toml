@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AstroForge 前端编译器：将 Rsbuild 产物归一化为 Component / Page IR。"
+description = "AstroForge Front-end compiler"
 
 [dependencies]
 astroforge-ir = { workspace = true }

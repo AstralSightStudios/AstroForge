@@ -1,36 +1,31 @@
 {
-  "name": "@astroforge/runtime-vela",
+  "name": "@astroforge/cli-linux-x64-gnu",
   "version": "0.0.1",
-  "description": "AstroForge Vela Runtime",
+  "description": "AstroForge CLI for linux-x64-gnu",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AstralSightStudios/AstroForge.git",
-    "directory": "packages/runtime-vela"
+    "directory": "packages/cli-linux-x64-gnu"
   },
   "homepage": "https://github.com/AstralSightStudios/AstroForge#readme",
   "bugs": {
     "url": "https://github.com/AstralSightStudios/AstroForge/issues"
   },
-  "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
-    }
-  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ],
   "files": [
-    "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
-  "scripts": {
-    "build": "tsdown",
-    "prepublishOnly": "tsdown"
-  },
   "publishConfig": {
     "access": "public"
   },

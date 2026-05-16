@@ -248,7 +248,59 @@ fixtures/<NN>-<name>/
 
 不要因为这一节存在就主动开始做。**等用户明确点名**。
 
-## 11. AGENTS.md 可变性
+## 11. 发布到 npm
+
+`packages/` 下分两类可发布包：
+
+**TS / 插件包**（普通发布）：
+- `@astroforge/core`
+- `@astroforge/rsbuild-plugin`
+- `@astroforge/runtime-vela`
+
+构建用 `tsdown`（输出 `.mjs` + `.d.mts`），由 `prepublishOnly` 自动触发。本地发布：
+
+```bash
+pnpm -r --filter='./packages/*' publish --access public --no-git-checks
+```
+
+**CLI 包**（多平台 prebuild + optionalDependencies 模式）：
+- 主包 `astroforge`（Node 端薄壳）
+- 6 个平台子包：`@astroforge/cli-{darwin-arm64,darwin-x64,linux-x64-gnu,linux-arm64-gnu,win32-x64-msvc,win32-arm64-msvc}`
+
+主包通过 `optionalDependencies` 列出 6 个平台子包，npm/pnpm 在装包时按 `os`/`cpu`/`libc` 自动只装匹配本机的那一个。子包发布顺序必须先于主包，否则消费端装不到对应版本的二进制。
+
+CI 流水线 `.github/workflows/release-cli.yml`：
+
+- 触发：push tag `cli-v<semver>`，或 `workflow_dispatch`（可选 `dry_run`）。
+- build 阶段：6 个 native runner（macos-14、macos-13、ubuntu-24.04、ubuntu-24.04-arm、windows-latest、windows-11-arm）跑 `cargo build --release -p astroforge-cli`，产出落到对应平台子包的 `bin/`，并 `--version` smoke test。
+- publish 阶段：下载所有 artifact → `scripts/sync-cli-version.mjs <version>` 把 6 个子包 + 主包 + 主包的 `optionalDependencies` pin 统一到目标版本 → `npm pack` 校验产物 → `npm publish --access public --provenance` 子包 → `npm publish --access public --provenance` 主包。
+
+**鉴权 — Trusted Publishing (OIDC，无长期 token)**：
+
+npm 自 2025 推荐的 CI 鉴权机制。本工作流不使用任何 `NPM_TOKEN` secret——`id-token: write` 权限让 job 拿到 GitHub OIDC token，npm CLI ≥ 11.5.0 自动换出临时 publish token。前提是在 npm 端为每个包（7 个：主包 + 6 个平台子包）配好 trusted publisher：
+
+```
+npmjs.com → 包详情 → Settings → Trusted Publishers → Add publisher
+  Provider:            GitHub Actions
+  Organization/user:   AstralSightStudios
+  Repository:          AstroForge
+  Workflow filename:   release-cli.yml
+  Environment:         （留空；如启用 deployment environment 此处对应）
+```
+
+未发布的包名也可以预配置 trusted publisher——直接 CI 首发亦可。`--provenance` 标记需要 trusted publishing 或 npm automation token，OIDC 路径下天然带签发凭据，可直接在 npm 包详情页看到 "Built and signed on GitHub Actions" 的 attestation。
+
+本地手动应急发布（CI 故障 / 首次占用包名）仍可走 `npm login` + `npm publish`，但日常版本走流水线，最小化长期 token 暴露面。
+
+本地手动同步版本号：
+
+```bash
+node scripts/sync-cli-version.mjs 0.0.2
+```
+
+二进制查找顺序（在 `packages/cli-js/src/resolve-bin.js`）：`ASTROFORGE_BIN` env → 仓库 `target/{release,debug}/astroforge` → 装入 `node_modules` 的平台子包 → PATH 兜底。开发者在仓库内直接 `pnpm exec astroforge` 命中 cargo 产物，下游用户 npm 装下后命中平台子包。
+
+## 12. AGENTS.md 可变性
 
 该项目在持续进展，并由多个不同的LLM以及人类混合编码。你随时可以将你的所见所闻写进这里，优化各种流程。
 如果你意识到这个文件里有东西是错的，也可以及时纠正。

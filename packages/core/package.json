@@ -1,21 +1,64 @@
 {
   "name": "@astroforge/core",
   "version": "0.0.1",
-  "description": "AstroForge 用户侧核心：JSX runtime、内置组件、hooks。",
-  "license": "ISC",
+  "description": "AstroForge Core: JSX runtime、Components、hooks。",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AstralSightStudios/AstroForge.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/AstralSightStudios/AstroForge#readme",
+  "bugs": {
+    "url": "https://github.com/AstralSightStudios/AstroForge/issues"
+  },
   "type": "module",
-  "main": "./src/index.ts",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./src/index.ts",
-    "./components": "./src/components.ts",
-    "./apis": "./src/apis.ts",
-    "./platform": "./src/platform.ts",
-    "./jsx-runtime": "./src/jsx-runtime.ts",
-    "./jsx-dev-runtime": "./src/jsx-runtime.ts"
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./components": {
+      "types": "./dist/components.d.mts",
+      "import": "./dist/components.mjs"
+    },
+    "./apis": {
+      "types": "./dist/apis.d.mts",
+      "import": "./dist/apis.mjs"
+    },
+    "./platform": {
+      "types": "./dist/platform.d.mts",
+      "import": "./dist/platform.mjs"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.mts",
+      "import": "./dist/hooks.mjs"
+    },
+    "./jsx-runtime": {
+      "types": "./dist/jsx-runtime.d.mts",
+      "import": "./dist/jsx-runtime.mjs"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./dist/jsx-runtime.d.mts",
+      "import": "./dist/jsx-runtime.mjs"
+    }
   },
   "files": [
-    "src"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
-  "peerDependencies": {},
-  "dependencies": {}
+  "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "tsdown"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
 }

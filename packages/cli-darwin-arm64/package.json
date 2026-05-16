@@ -1,36 +1,28 @@
 {
-  "name": "@astroforge/runtime-vela",
+  "name": "@astroforge/cli-darwin-arm64",
   "version": "0.0.1",
-  "description": "AstroForge Vela Runtime",
+  "description": "AstroForge CLI for darwin-arm64",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AstralSightStudios/AstroForge.git",
-    "directory": "packages/runtime-vela"
+    "directory": "packages/cli-darwin-arm64"
   },
   "homepage": "https://github.com/AstralSightStudios/AstroForge#readme",
   "bugs": {
     "url": "https://github.com/AstralSightStudios/AstroForge/issues"
   },
-  "type": "module",
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
-    }
-  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
   "files": [
-    "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
-  "scripts": {
-    "build": "tsdown",
-    "prepublishOnly": "tsdown"
-  },
   "publishConfig": {
     "access": "public"
   },

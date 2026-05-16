@@ -1,15 +1,42 @@
 {
   "name": "astroforge",
   "version": "0.0.1",
-  "description": "AstroForge CLI 的 Node 端薄封装，转发到 Rust 实现。",
-  "license": "ISC",
+  "description": "AstroForge CLI — React/TSX 智能手表快应用工具链",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AstralSightStudios/AstroForge.git",
+    "directory": "packages/cli-js"
+  },
+  "homepage": "https://github.com/AstralSightStudios/AstroForge#readme",
+  "bugs": {
+    "url": "https://github.com/AstralSightStudios/AstroForge/issues"
+  },
   "type": "module",
   "bin": {
     "astroforge": "./bin/astroforge.js"
   },
-  "main": "./src/index.ts",
   "files": [
-    "src",
-    "bin"
-  ]
+    "bin",
+    "src/resolve-bin.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "echo \"(astroforge wrapper 无需构建步骤)\""
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.18"
+  },
+  "optionalDependencies": {
+    "@astroforge/cli-darwin-arm64": "0.0.1",
+    "@astroforge/cli-darwin-x64": "0.0.1",
+    "@astroforge/cli-linux-x64-gnu": "0.0.1",
+    "@astroforge/cli-linux-arm64-gnu": "0.0.1",
+    "@astroforge/cli-win32-x64-msvc": "0.0.1",
+    "@astroforge/cli-win32-arm64-msvc": "0.0.1"
+  }
 }

@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@astroforge/core",
     "strict": true,
+    "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,

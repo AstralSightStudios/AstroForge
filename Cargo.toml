@@ -14,8 +14,8 @@ members = [
 version = "0.0.1"
 edition = "2024"
 rust-version = "1.89"
-license = "ISC"
-repository = "https://github.com/searchstars/AstroForge"
+license = "MIT"
+repository = "https://github.com/AstralSightStudios/AstroForge"
 description = "A modern, Rust-powered toolchain for smartwatch quick apps with a React-like development experience."
 
 [workspace.dependencies]

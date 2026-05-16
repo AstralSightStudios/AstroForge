@@ -1,0 +1,247 @@
+# 多平台预编译 + npm 发布流水线。
+#
+# 入口：
+# - push tag `cli-v<semver>`：发布 release（6 个 @astroforge/cli-* 子包 + 主包
+#   `astroforge`）；版本号从 tag 自动派生。
+# - workflow_dispatch：手动触发，可指定 version 与是否真实 publish（默认 true）。
+#
+# 关键不变式：
+# - 6 个 @astroforge/cli-* 子包与主包 astroforge 必须共享同一 version；
+# - 主包 astroforge.optionalDependencies 引用的子包版本必须与本次发布版本一致；
+# - 子包必须先 publish 成功，主包才能 publish——否则消费端装包会因为找不到
+#   对应版本的 optional sub package 而退化。
+#
+# 鉴权：npm Trusted Publishing（OIDC）。本工作流不使用长期 token；改在 npm
+# 端为每个包配置 trusted publisher：
+#   npmjs.com → 包详情 → Settings → Trusted Publishers → Add publisher
+#     Provider: GitHub Actions
+#     Organization or user: AstralSightStudios
+#     Repository:           AstroForge
+#     Workflow filename:    release-cli.yml
+#     Environment:          （留空；如启用 deployment environment 此处对应）
+# 配置完成后本 publish job 通过 `id-token: write` 拿到的 OIDC token 自动换出
+# npm 的临时 publish token，无需任何 secret。npm CLI ≥ 11.5.0 才支持，因此
+# publish job 显式 `npm install -g npm@latest`。
+#
+# 首次发布（新包名）：trusted publishing 也允许在「未发布」的包名上预配置；
+# 若你倾向先用本地 `npm publish` 占用包名再启用 OIDC，本工作流之后不需要任
+# 何改动——配置面板生效后下一次 push tag 即走 OIDC。
+
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "cli-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要发布的版本号（例如 0.0.2）。留空时从 packages/cli-js/package.json 读取。"
+        required: false
+      dry_run:
+        description: "是否仅 dry-run（不真正 publish）"
+        required: false
+        default: "false"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  resolve-version:
+    name: Resolve version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+      dry_run: ${{ steps.pick.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            ref="${{ github.ref_name }}"
+            version="${ref#cli-v}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version=$(node -p "require('./packages/cli-js/package.json').version")
+          fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Version '$version' 不符合 semver"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          dry_run="${{ inputs.dry_run }}"
+          dry_run="${dry_run:-false}"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+          echo "解析版本号：$version (dry_run=$dry_run)"
+
+  build:
+    name: Build ${{ matrix.pkg }}
+    needs: resolve-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            pkg: cli-darwin-arm64
+            exe: astroforge
+          - os: macos-13
+            target: x86_64-apple-darwin
+            pkg: cli-darwin-x64
+            exe: astroforge
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            pkg: cli-linux-x64-gnu
+            exe: astroforge
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            pkg: cli-linux-arm64-gnu
+            exe: astroforge
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            pkg: cli-win32-x64-msvc
+            exe: astroforge.exe
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            pkg: cli-win32-arm64-msvc
+            exe: astroforge.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry & target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cli-${{ matrix.target }}
+
+      - name: cargo build --release
+        run: cargo build --release -p astroforge-cli --target ${{ matrix.target }}
+
+      - name: Stage binary into platform package
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="target/${{ matrix.target }}/release/${{ matrix.exe }}"
+          dest="packages/${{ matrix.pkg }}/bin/${{ matrix.exe }}"
+          test -f "$src" || { echo "::error::缺失 cargo 产物：$src"; exit 1; }
+          cp "$src" "$dest"
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            chmod +x "$dest"
+            file "$dest" || true
+          fi
+          ls -lh "$dest"
+
+      - name: Smoke test binary
+        shell: bash
+        run: |
+          dest="packages/${{ matrix.pkg }}/bin/${{ matrix.exe }}"
+          "$dest" --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.pkg }}
+          path: packages/${{ matrix.pkg }}/bin/${{ matrix.exe }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish to npm (OIDC)
+    needs: [resolve-version, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      # `id-token: write` 让本 job 通过 OIDC 向 npm 换 publish token；trusted
+      # publishing 与 --provenance 都依赖这个权限。
+      id-token: write
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve-version.outputs.version }}
+      DRY_RUN: ${{ needs.resolve-version.outputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org/"
+
+      - name: Ensure npm ≥ 11.5.0 (trusted publishing 支持线)
+        shell: bash
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: Download all platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage all binaries into platform packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pkg in cli-darwin-arm64 cli-darwin-x64 cli-linux-x64-gnu cli-linux-arm64-gnu cli-win32-x64-msvc cli-win32-arm64-msvc; do
+            mkdir -p "packages/$pkg/bin"
+            cp -R "artifacts/$pkg/." "packages/$pkg/bin/"
+            chmod +x "packages/$pkg/bin/"* 2>/dev/null || true
+            ls -lh "packages/$pkg/bin/"
+          done
+
+      - name: Sync version across CLI packages
+        shell: bash
+        run: node scripts/sync-cli-version.mjs "$VERSION"
+
+      - name: Verify packaged contents (dry pack)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pack-out
+          for pkg in cli-darwin-arm64 cli-darwin-x64 cli-linux-x64-gnu cli-linux-arm64-gnu cli-win32-x64-msvc cli-win32-arm64-msvc cli-js; do
+            echo "::group::pack $pkg"
+            (cd "packages/$pkg" && npm pack --pack-destination /tmp/pack-out)
+            echo "::endgroup::"
+          done
+          ls -lh /tmp/pack-out
+
+      - name: Publish platform sub-packages
+        if: env.DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # 注：不设 NODE_AUTH_TOKEN / NPM_TOKEN。npm CLI 检测到
+          # ACTIONS_ID_TOKEN_REQUEST_TOKEN / ACTIONS_ID_TOKEN_REQUEST_URL
+          # 后自动走 OIDC 换 publish token；前提是 npm 端已为每个包配好
+          # trusted publisher（详见本文件头部注释）。
+          for pkg in cli-darwin-arm64 cli-darwin-x64 cli-linux-x64-gnu cli-linux-arm64-gnu cli-win32-x64-msvc cli-win32-arm64-msvc; do
+            echo "::group::publish $pkg"
+            (cd "packages/$pkg" && npm publish --access public --provenance)
+            echo "::endgroup::"
+          done
+
+      - name: Publish main wrapper (astroforge)
+        if: env.DRY_RUN != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd packages/cli-js && npm publish --access public --provenance)
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "### AstroForge CLI release"
+            echo ""
+            echo "- Version: \`$VERSION\`"
+            echo "- Dry run: \`$DRY_RUN\`"
+            echo "- 平台子包：cli-darwin-arm64 / darwin-x64 / linux-x64-gnu / linux-arm64-gnu / win32-x64-msvc / win32-arm64-msvc"
+            echo "- 主包：\`astroforge\`"
+            echo "- 鉴权：npm Trusted Publishing (OIDC) + \`--provenance\` 签名"
+          } >> "$GITHUB_STEP_SUMMARY"
