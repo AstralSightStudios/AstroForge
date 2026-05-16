@@ -1,12 +1,12 @@
 # 多平台预编译 + npm 发布流水线。
 #
 # 入口：
-# - push tag `cli-v<semver>`：发布 release（6 个 @astroforge/cli-* 子包 + 主包
+# - push tag `cli-v<semver>`：发布 release（6 个 @astralsight/astroforge-cli-* 子包 + 主包
 #   `astroforge`）；版本号从 tag 自动派生。
 # - workflow_dispatch：手动触发，可指定 version 与是否真实 publish（默认 true）。
 #
 # 关键不变式：
-# - 6 个 @astroforge/cli-* 子包与主包 astroforge 必须共享同一 version；
+# - 6 个 @astralsight/astroforge-cli-* 子包与主包 astroforge 必须共享同一 version；
 # - 主包 astroforge.optionalDependencies 引用的子包版本必须与本次发布版本一致；
 # - 子包必须先 publish 成功，主包才能 publish——否则消费端装包会因为找不到
 #   对应版本的 optional sub package 而退化。

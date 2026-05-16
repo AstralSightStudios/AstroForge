@@ -10,8 +10,8 @@ src/
 ├─ common/                # 资源（图标、字体等），相对路径以 / 开头时被打入包内
 └─ pages/<name>/<name>.tsx  # 页面，按文件路径自动发现并注册到 router
 astroforge.config.ts       # manifest 与 plugin 配置
-rsbuild.config.ts          # Rsbuild 入口；自动加载 @astroforge/rsbuild-plugin
-tsconfig.json              # 启用 JSX automatic runtime + @astroforge/core
+rsbuild.config.ts          # Rsbuild 入口；自动加载 @astralsight/astroforge-rsbuild-plugin
+tsconfig.json              # 启用 JSX automatic runtime + @astralsight/astroforge-core
 ```
 
 ## 常用命令

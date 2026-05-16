@@ -1,4 +1,4 @@
-import { Text, View, useState } from "@astroforge/core";
+import { Text, View, useState } from "@astralsight/astroforge-core";
 
 export default function IndexPage() {
   const [items, setItems] = useState([

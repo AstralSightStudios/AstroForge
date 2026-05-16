@@ -1,6 +1,6 @@
 # Rsbuild 插件设计
 
-`@astroforge/rsbuild-plugin` 是 AstroForge 前端编译链的入口。它负责发现页面、
+`@astralsight/astroforge-rsbuild-plugin` 是 AstroForge 前端编译链的入口。它负责发现页面、
 解析 TSX、生成跨进程 IR，并把 Rsbuild 的基础构建能力限制在快应用工具链需要
 的范围内。
 
@@ -9,7 +9,7 @@
 - 从项目根目录读取 `astroforge.config.ts`。配置文件必须是可静态解析的对象
   字面量，不执行任意 TypeScript 代码。
 - 自动发现 `src/pages/**/*.{tsx,ts,jsx}` 页面入口。
-- 将 `@astroforge/core` 导出的 PascalCase 内置组件识别为快应用渲染标签，
+- 将 `@astralsight/astroforge-core` 导出的 PascalCase 内置组件识别为快应用渲染标签，
   例如 `View` / `Text` / `Image` 分别转换为 `div` / `text` / `image`，
   `ListItem` / `ImageAnimator` 分别转换为 `list-item` / `image-animator`。
 - 提取静态文本、静态属性、动态属性绑定和事件绑定。
@@ -30,12 +30,12 @@
   为 Style IR。
 - 收集 manifest icon、静态 `Image.src`、静态 CSS `url(...)` 指向的项目内资
   源，并写入 IR 根节点的 `assets`。
-- 按 `@astroforge/core/platform` 的能力目录校验目标平台支持的组件与
+- 按 `@astralsight/astroforge-core/platform` 的能力目录校验目标平台支持的组件与
   manifest feature，提前拒绝当前目标不能使用的接口或标签。
 - 在 Rsbuild `onBeforeBuild` / `onBeforeDevCompile` 阶段写出
   `node_modules/.cache/astroforge/ir-document.json`。
 - 通过 `modifyRsbuildConfig` 设置 Rsbuild entry，并配置 SWC automatic JSX
-  runtime，`importSource` 固定为 `@astroforge/core`。
+  runtime，`importSource` 固定为 `@astralsight/astroforge-core`。
 
 ## IR 输出位置
 
@@ -49,7 +49,7 @@ node_modules/.cache/astroforge/ir-document.json
 
 ```ts
 import { defineConfig } from "@rsbuild/core";
-import { pluginAstroForge } from "@astroforge/rsbuild-plugin";
+import { pluginAstroForge } from "@astralsight/astroforge-rsbuild-plugin";
 
 export default defineConfig({
   plugins: [

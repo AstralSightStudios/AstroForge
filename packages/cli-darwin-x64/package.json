@@ -1,5 +1,5 @@
 {
-  "name": "@astroforge/cli-darwin-x64",
+  "name": "@astralsight/astroforge-cli-darwin-x64",
   "version": "0.0.1",
   "description": "AstroForge CLI for darwin-x64",
   "license": "MIT",

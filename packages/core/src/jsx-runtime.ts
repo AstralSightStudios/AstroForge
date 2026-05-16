@@ -19,7 +19,7 @@ export namespace JSX {
 }
 
 const NOT_REACHABLE =
-  "AstroForge: jsx 运行时不应被执行。请确认已启用 @astroforge/rsbuild-plugin。";
+  "AstroForge: jsx 运行时不应被执行。请确认已启用 @astralsight/astroforge-rsbuild-plugin。";
 
 export function jsx(_type: unknown, _props: unknown, _key?: unknown): never {
   throw new Error(NOT_REACHABLE);

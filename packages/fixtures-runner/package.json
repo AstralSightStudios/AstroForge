@@ -1,5 +1,5 @@
 {
-  "name": "@astroforge/fixtures-runner",
+  "name": "@astralsight/astroforge-fixtures-runner",
   "version": "0.0.1",
   "private": true,
   "description": "驱动 fixtures/ 经 aiot-toolkit 与 AstroForge 双轨编译，写出 golden/。",

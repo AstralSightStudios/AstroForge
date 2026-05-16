@@ -2,7 +2,7 @@ import {
   unsupportedCapabilities,
   type CapabilityIssue,
   type PlatformId,
-} from "@astroforge/core/platform";
+} from "@astralsight/astroforge-core/platform";
 import type { IrDocument, Node } from "./ir";
 
 export function validatePlatformCapabilities(

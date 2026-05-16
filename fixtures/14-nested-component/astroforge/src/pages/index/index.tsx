@@ -1,4 +1,4 @@
-import { Text, View } from "@astroforge/core";
+import { Text, View } from "@astralsight/astroforge-core";
 
 function ContactCard(props: {
   name: string;

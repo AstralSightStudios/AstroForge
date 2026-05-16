@@ -336,7 +336,7 @@ function defaultExportName(body: any[]): string | undefined {
 }
 
 /// 扫描模块的 import 声明，提取所有指向相对路径（`./`、`../`）的
-/// PascalCase 命名导入；过滤掉 `@astroforge/core` 内置绑定与同文件已声明
+/// PascalCase 命名导入；过滤掉 `@astralsight/astroforge-core` 内置绑定与同文件已声明
 /// 的组件，避免重复加入 IR.components 表。
 function collectComponentImports(
   body: any[],
@@ -412,7 +412,7 @@ function collectAstroForgeImports(body: any[]): Map<string, string> {
   for (const statement of body) {
     if (
       statement.type !== "ImportDeclaration" ||
-      !["@astroforge/core", "@astroforge/core/components"].includes(
+      !["@astralsight/astroforge-core", "@astralsight/astroforge-core/components"].includes(
         statement.source.value,
       )
     ) {

@@ -6,7 +6,7 @@
 //    `target/debug/astroforge`，方便 `pnpm exec astroforge` 在本仓库内直接打到
 //    新鲜 `cargo build` 产出；
 // 3. 已通过 npm `optionalDependencies` 装入 `node_modules` 的平台子包
-//    `@astroforge/cli-<platform>/bin/astroforge[.exe]`；
+//    `@astralsight/astroforge-cli-<platform>/bin/astroforge[.exe]`；
 // 4. PATH 中的 `astroforge`（最后兜底，多见于本地手动 `cargo install`）。
 //
 // 平台键按 Node 的 `process.platform` × `process.arch` 拼，与子包发布脚本里
@@ -19,12 +19,12 @@ import { resolve } from "node:path";
 const require = createRequire(import.meta.url);
 
 const PLATFORM_PACKAGES = {
-  "darwin-arm64": "@astroforge/cli-darwin-arm64",
-  "darwin-x64": "@astroforge/cli-darwin-x64",
-  "linux-x64-glibc": "@astroforge/cli-linux-x64-gnu",
-  "linux-arm64-glibc": "@astroforge/cli-linux-arm64-gnu",
-  "win32-x64": "@astroforge/cli-win32-x64-msvc",
-  "win32-arm64": "@astroforge/cli-win32-arm64-msvc",
+  "darwin-arm64": "@astralsight/astroforge-cli-darwin-arm64",
+  "darwin-x64": "@astralsight/astroforge-cli-darwin-x64",
+  "linux-x64-glibc": "@astralsight/astroforge-cli-linux-x64-gnu",
+  "linux-arm64-glibc": "@astralsight/astroforge-cli-linux-arm64-gnu",
+  "win32-x64": "@astralsight/astroforge-cli-win32-x64-msvc",
+  "win32-arm64": "@astralsight/astroforge-cli-win32-arm64-msvc",
 };
 
 export function resolveAstroForgeBin(workspaceRoot) {

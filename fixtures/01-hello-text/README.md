@@ -37,7 +37,7 @@
 ## 运行方法
 
 ```bash
-pnpm --filter @astroforge/fixtures-runner exec astroforge-fixtures run 01-hello-text
+pnpm --filter @astralsight/astroforge-fixtures-runner exec astroforge-fixtures run 01-hello-text
 ```
 
 或手动：

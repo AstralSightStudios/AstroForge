@@ -1,4 +1,4 @@
-import { Text, View } from "@astroforge/core";
+import { Text, View } from "@astralsight/astroforge-core";
 
 export const styles = `
   /* Comments are ignored before selector parsing. */

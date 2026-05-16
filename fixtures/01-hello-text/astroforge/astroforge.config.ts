@@ -1,4 +1,4 @@
-import type { AstroForgePluginOptions } from '@astroforge/rsbuild-plugin';
+import type { AstroForgePluginOptions } from '@astralsight/astroforge-rsbuild-plugin';
 
 // fixture 01 的 AstroForge 项目配置。
 //

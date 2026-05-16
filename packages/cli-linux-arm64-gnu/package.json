@@ -1,5 +1,5 @@
 {
-  "name": "@astroforge/cli-linux-arm64-gnu",
+  "name": "@astralsight/astroforge-cli-linux-arm64-gnu",
   "version": "0.0.1",
   "description": "AstroForge CLI for linux-arm64-gnu",
   "license": "MIT",

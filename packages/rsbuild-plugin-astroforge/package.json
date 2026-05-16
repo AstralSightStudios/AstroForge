@@ -1,5 +1,5 @@
 {
-  "name": "@astroforge/rsbuild-plugin",
+  "name": "@astralsight/astroforge-rsbuild-plugin",
   "version": "0.0.1",
   "description": "AstroForge Plugin for RsBuild",
   "license": "MIT",
@@ -41,7 +41,7 @@
     "@rsbuild/core": ">=1.0.0"
   },
   "dependencies": {
-    "@astroforge/core": "workspace:^",
+    "@astralsight/astroforge-core": "workspace:^",
     "@babel/parser": "^7.29.3"
   }
 }

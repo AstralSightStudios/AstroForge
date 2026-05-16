@@ -9,11 +9,11 @@
     "dev": "astroforge dev"
   },
   "dependencies": {
-    "@astroforge/core": "workspace:*"
+    "@astralsight/astroforge-core": "workspace:*"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.6",
-    "@astroforge/rsbuild-plugin": "workspace:*",
-    "astroforge": "workspace:*"
+    "@astralsight/astroforge-rsbuild-plugin": "workspace:*",
+    "@astralsight/astroforge": "workspace:*"
   }
 }

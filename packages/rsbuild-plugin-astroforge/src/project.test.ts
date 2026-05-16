@@ -415,7 +415,7 @@ describe("AstroForge project compiler", () => {
     mkdirSync(join(srcRoot, "common"), { recursive: true });
     writeFileSync(
       join(srcRoot, "pages/index/index.tsx"),
-      `import { Text, View } from "@astroforge/core";
+      `import { Text, View } from "@astralsight/astroforge-core";
 
 export default function IndexPage() {
   return <View><Text>Unsupported feature</Text></View>;
@@ -558,7 +558,7 @@ export default function IndexPage() {
 
     writeFileSync(
       join(srcRoot, "pages/index/index.tsx"),
-      `import { View } from "@astroforge/core";
+      `import { View } from "@astralsight/astroforge-core";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 
@@ -574,7 +574,7 @@ export default function IndexPage() {
     );
     writeFileSync(
       join(srcRoot, "components/Card.tsx"),
-      `import { Text, View } from "@astroforge/core";
+      `import { Text, View } from "@astralsight/astroforge-core";
 import { Badge } from "./Badge";
 
 export function Card() {
@@ -589,7 +589,7 @@ export function Card() {
     );
     writeFileSync(
       join(srcRoot, "components/Badge.tsx"),
-      `import { Text } from "@astroforge/core";
+      `import { Text } from "@astralsight/astroforge-core";
 
 export function Badge() {
   return <Text>Badge text</Text>;
@@ -641,7 +641,7 @@ export function Badge() {
     writeFileSync(
       join(srcRoot, "pages/index/index.tsx"),
       `import "./index.css";
-import { View } from "@astroforge/core";
+import { View } from "@astralsight/astroforge-core";
 
 export default function IndexPage() {
   return <View className="card" />;

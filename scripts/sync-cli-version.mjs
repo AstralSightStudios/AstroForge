@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 把 6 个 @astroforge/cli-* 平台子包 + 主包 astroforge 的 package.json version
+// 把 6 个 @astralsight/astroforge-cli-* 平台子包 + 主包 astroforge 的 package.json version
 // 同步到 argv[2] 指定的语义化版本号；同步更新主包 optionalDependencies 里对
 // 各子包的版本固定为同一值。
 //

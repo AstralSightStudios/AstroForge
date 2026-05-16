@@ -1,12 +1,12 @@
-# @astroforge/rsbuild-plugin
+# @astralsight/astroforge-rsbuild-plugin
 
 AstroForge 的 [Rsbuild](https://rsbuild.dev/) 插件：在 TSX 源码与厂商 quick-app runtime（小米 Vela / vivo BlueOS 等）之间生成跨进程 IR 契约（`docs/ir-document.schema.json`）。
 
 ## 安装
 
 ```bash
-pnpm add -D @astroforge/rsbuild-plugin @rsbuild/core
-pnpm add @astroforge/core
+pnpm add -D @astralsight/astroforge-rsbuild-plugin @rsbuild/core
+pnpm add @astralsight/astroforge-core
 ```
 
 ## 使用
@@ -14,7 +14,7 @@ pnpm add @astroforge/core
 ```ts
 // rsbuild.config.ts
 import { defineConfig } from "@rsbuild/core";
-import { pluginAstroForge } from "@astroforge/rsbuild-plugin";
+import { pluginAstroForge } from "@astralsight/astroforge-rsbuild-plugin";
 
 export default defineConfig({
   plugins: [pluginAstroForge({ target: "vela" })],

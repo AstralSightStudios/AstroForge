@@ -51,7 +51,7 @@ describe("pluginAstroForge", () => {
     const swcConfig = merged.tools.swc({});
     expect(swcConfig.jsc.transform.react).toMatchObject({
       runtime: "automatic",
-      importSource: "@astroforge/core",
+      importSource: "@astralsight/astroforge-core",
     });
   });
 });

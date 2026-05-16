@@ -33,7 +33,7 @@
 TSX source
    │
    ▼
-@astroforge/rsbuild-plugin  (packages/rsbuild-plugin-astroforge/)
+@astralsight/astroforge-rsbuild-plugin  (packages/rsbuild-plugin-astroforge/)
    │  - 发现 src/pages/**
    │  - 抽 TSX → Component IR
    │  - 抽 useState / lifecycle / methods → Page IR.script
@@ -253,9 +253,9 @@ fixtures/<NN>-<name>/
 `packages/` 下分两类可发布包：
 
 **TS / 插件包**（普通发布）：
-- `@astroforge/core`
-- `@astroforge/rsbuild-plugin`
-- `@astroforge/runtime-vela`
+- `@astralsight/astroforge-core`
+- `@astralsight/astroforge-rsbuild-plugin`
+- `@astralsight/astroforge-runtime-vela`
 
 构建用 `tsdown`（输出 `.mjs` + `.d.mts`），由 `prepublishOnly` 自动触发。本地发布：
 
@@ -265,7 +265,7 @@ pnpm -r --filter='./packages/*' publish --access public --no-git-checks
 
 **CLI 包**（多平台 prebuild + optionalDependencies 模式）：
 - 主包 `astroforge`（Node 端薄壳）
-- 6 个平台子包：`@astroforge/cli-{darwin-arm64,darwin-x64,linux-x64-gnu,linux-arm64-gnu,win32-x64-msvc,win32-arm64-msvc}`
+- 6 个平台子包：`@astralsight/astroforge-cli-{darwin-arm64,darwin-x64,linux-x64-gnu,linux-arm64-gnu,win32-x64-msvc,win32-arm64-msvc}`
 
 主包通过 `optionalDependencies` 列出 6 个平台子包，npm/pnpm 在装包时按 `os`/`cpu`/`libc` 自动只装匹配本机的那一个。子包发布顺序必须先于主包，否则消费端装不到对应版本的二进制。
 

@@ -1,4 +1,4 @@
-import { Image, View } from "@astroforge/core";
+import { Image, View } from "@astralsight/astroforge-core";
 
 export default function IndexPage() {
   return (

@@ -35,291 +35,291 @@ importers:
 
   fixtures/01-hello-text/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/02-static-style/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/03-image-asset/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/04-click-event/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/05-use-state-counter/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/06-conditional-render/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/07-list-render/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/08-page-lifecycle/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/09-app-lifecycle/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/10-navigation/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/11-storage-api/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/12-network-api/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/13-timer/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/14-nested-component/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/15-multi-page/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/16-permission-manifest/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/17-resource-path/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   fixtures/18-css-edge-cases/astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:*
         version: link:../../../packages/core
     devDependencies:
-      '@astroforge/rsbuild-plugin':
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
         specifier: workspace:*
         version: link:../../../packages/rsbuild-plugin-astroforge
       '@rsbuild/core':
         specifier: ^2.0.6
         version: 2.0.6
-      astroforge:
-        specifier: workspace:*
-        version: link:../../../packages/cli-js
 
   packages/cli-darwin-arm64: {}
 
@@ -341,7 +341,7 @@ importers:
 
   packages/rsbuild-plugin-astroforge:
     dependencies:
-      '@astroforge/core':
+      '@astralsight/astroforge-core':
         specifier: workspace:^
         version: link:../core
       '@babel/parser':

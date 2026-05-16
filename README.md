@@ -18,7 +18,7 @@
 
 - Phase 0：Vela 运行时 ABI 研究骨架与 aiot-toolkit 源码缓存已建立。
 - Phase 1：Rust 侧 IR、schema、I/O、diff 基础设施已落地。
-- Phase 2：`@astroforge/rsbuild-plugin` 能从静态文本、点击事件、`useState`
+- Phase 2：`@astralsight/astroforge-rsbuild-plugin` 能从静态文本、点击事件、`useState`
   counter、条件渲染、列表渲染、生命周期等 18 个 fixture 的 TSX 页面生成
   符合 `docs/ir-document.schema.json` 的 IR 文件；支持跨文件相对路径组件
   import（BFS 加载、循环去重、可达组件递归）；manifest 未知字段按源序透传。

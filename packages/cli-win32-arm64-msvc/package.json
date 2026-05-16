@@ -1,5 +1,5 @@
 {
-  "name": "@astroforge/cli-win32-arm64-msvc",
+  "name": "@astralsight/astroforge-cli-win32-arm64-msvc",
   "version": "0.0.1",
   "description": "AstroForge CLI for win32-arm64-msvc",
   "license": "MIT",

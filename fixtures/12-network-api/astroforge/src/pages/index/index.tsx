@@ -1,4 +1,4 @@
-import { Text, View, network } from "@astroforge/core";
+import { Text, View, network } from "@astralsight/astroforge-core";
 
 export default function IndexPage() {
   function load() {

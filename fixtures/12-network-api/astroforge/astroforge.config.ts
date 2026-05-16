@@ -1,4 +1,4 @@
-import type { AstroForgePluginOptions } from "@astroforge/rsbuild-plugin";
+import type { AstroForgePluginOptions } from "@astralsight/astroforge-rsbuild-plugin";
 
 export default {
   manifest: {

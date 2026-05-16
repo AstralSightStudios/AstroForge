@@ -1,7 +1,7 @@
-import { Image, Text, View } from "@astroforge/core";
+import { Image, Text, View } from "@astralsight/astroforge-core";
 
 // 首页入口。文件位于 `src/pages/index/index.tsx`，按约定 entry 路由为
-// `pages/index`。`<View>` / `<Text>` / `<Image>` 来自 @astroforge/core，
+// `pages/index`。`<View>` / `<Text>` / `<Image>` 来自 @astralsight/astroforge-core，
 // 在编译期被下沉为 Vela 厂商运行时的 `aiot.__ce__` 调用。
 export const styles = `
   .root {

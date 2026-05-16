@@ -1,4 +1,4 @@
-# @astroforge/runtime-vela
+# @astralsight/astroforge-runtime-vela
 
 AstroForge 注入到 Vela 设备端产物的运行时垫片，承载 `aiot.__ce__` / `aiot.__cc__` 等内置原语之外的辅助代码（开发诊断 hook、样式转换后备实现、状态更新桥）。
 

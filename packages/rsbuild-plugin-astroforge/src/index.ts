@@ -1,5 +1,5 @@
 import type { RsbuildPlugin } from "@rsbuild/core";
-import type { PlatformId } from "@astroforge/core/platform";
+import type { PlatformId } from "@astralsight/astroforge-core/platform";
 import type { AstroForgeManifestInput } from "./config";
 import {
   compileAstroForgeProject,
@@ -32,11 +32,11 @@ export function pluginAstroForge(
 ): RsbuildPlugin {
   const target = options.target ?? "vela";
   if (target !== "vela") {
-    throw new Error(`@astroforge/rsbuild-plugin: 暂不支持 target=${target}`);
+    throw new Error(`@astralsight/astroforge-rsbuild-plugin: 暂不支持 target=${target}`);
   }
 
   return {
-    name: "@astroforge/rsbuild-plugin",
+    name: "@astralsight/astroforge-rsbuild-plugin",
     setup(api) {
       const root = () => options.root ?? api.context.rootPath;
       const outFile = () =>
@@ -56,7 +56,7 @@ export function pluginAstroForge(
               swcConfig.jsc.transform.react = {
                 ...swcConfig.jsc.transform.react,
                 runtime: "automatic",
-                importSource: "@astroforge/core",
+                importSource: "@astralsight/astroforge-core",
               };
               return swcConfig;
             },

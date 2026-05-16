@@ -10,6 +10,11 @@ node_modules/
 # 消费（compat_goldens 只读 summary.json）。需要时通过 `astroforge test-compat
 # --official` 本地重生。
 fixtures/*/golden/*/unpacked/
+
+# CLI 平台子包内的预编译二进制：CI release 流水线产出，仅在发布阶段 stage
+# 进 bin/ 后 npm publish；本地手动发布也会 stage 一份，不应入库。
+packages/cli-*/bin/astroforge
+packages/cli-*/bin/astroforge.exe
 .DS_Store
 .idea/
 .vscode/*

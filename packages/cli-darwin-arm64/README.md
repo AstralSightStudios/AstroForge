@@ -1,4 +1,4 @@
-# @astroforge/cli-darwin-arm64
+# @astralsight/astroforge-cli-darwin-arm64
 
 macOS aarch64 (Apple Silicon) 平台下 `astroforge` CLI 的预编译二进制。
 

@@ -4,7 +4,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
-    "jsxImportSource": "@astroforge/core",
+    "jsxImportSource": "@astralsight/astroforge-core",
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,

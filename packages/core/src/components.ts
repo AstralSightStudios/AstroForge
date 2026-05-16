@@ -248,7 +248,7 @@ export interface VideoProps extends CommonProps {
 }
 
 const NOT_REACHABLE =
-  "AstroForge: 内置组件在运行时不应被实际调用。请确认已启用 @astroforge/rsbuild-plugin。";
+  "AstroForge: 内置组件在运行时不应被实际调用。请确认已启用 @astralsight/astroforge-rsbuild-plugin。";
 
 function component<P>(): FC<P> {
   return () => {

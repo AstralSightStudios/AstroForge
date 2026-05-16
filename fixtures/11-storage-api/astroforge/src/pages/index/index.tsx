@@ -1,4 +1,4 @@
-import { Text, View, storage } from "@astroforge/core";
+import { Text, View, storage } from "@astralsight/astroforge-core";
 
 export default function IndexPage() {
   function saveToken() {

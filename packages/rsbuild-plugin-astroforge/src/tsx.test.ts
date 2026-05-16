@@ -60,7 +60,7 @@ describe("TSX extraction", () => {
   it("extracts inline object style as a static JSON value", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View } from '@astroforge/core';
+        import { Text, View } from '@astralsight/astroforge-core';
         export default function Page() {
           return (
             <View style={{ color: 'red', fontSize: 16, padding: -8 }}>
@@ -97,7 +97,7 @@ describe("TSX extraction", () => {
   it("extracts mixed inline object style as per-slot values", () => {
     const page = extractPageFromTsx(
       `
-        import { View, useState } from '@astroforge/core';
+        import { View, useState } from '@astralsight/astroforge-core';
         export default function Page() {
           const [theme, setTheme] = useState({ color: 'red' });
           return <View style={{ color: theme.color, fontSize: 16 }} />;
@@ -124,7 +124,7 @@ describe("TSX extraction", () => {
   it("accepts static array literal attributes (classList-style)", () => {
     const page = extractPageFromTsx(
       `
-        import { View } from '@astroforge/core';
+        import { View } from '@astralsight/astroforge-core';
         export default function Page() {
           return <View data-tags={["primary", "card"]} />;
         }
@@ -141,7 +141,7 @@ describe("TSX extraction", () => {
   it("normalizes static attributes and event bindings", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View } from '@astroforge/core';
+        import { Text, View } from '@astralsight/astroforge-core';
         export default function Page() {
           return <View className="card" onClick={handleClick}><Text>{title}</Text></View>;
         }
@@ -166,7 +166,7 @@ describe("TSX extraction", () => {
   it("maps extended built-in components to Vela tag names", () => {
     const page = extractPageFromTsx(
       `
-        import { List, ListItem, QR, Slider, Swiper, Text } from '@astroforge/core';
+        import { List, ListItem, QR, Slider, Swiper, Text } from '@astralsight/astroforge-core';
         export default function Page() {
           return (
             <List>
@@ -216,7 +216,7 @@ describe("TSX extraction", () => {
   it("lowers function handlers into script methods", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View } from '@astroforge/core';
+        import { Text, View } from '@astralsight/astroforge-core';
         export default function Page() {
           function handleClick() {
             console.log("clicked");
@@ -246,7 +246,7 @@ describe("TSX extraction", () => {
   it("lowers useState declarations and setter calls into Page IR script fields", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View, useState } from '@astroforge/core';
+        import { Text, View, useState } from '@astralsight/astroforge-core';
         export default function Page() {
           const [count, setCount] = useState(0);
           function increment() {
@@ -294,7 +294,7 @@ describe("TSX extraction", () => {
   it("lowers ternary JSX into conditional Component IR", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View, useState } from '@astroforge/core';
+        import { Text, View, useState } from '@astralsight/astroforge-core';
         export default function Page() {
           const [isReady, setIsReady] = useState(true);
           return <View>{isReady ? <Text>Ready</Text> : <Text>Loading</Text>}</View>;
@@ -347,7 +347,7 @@ describe("TSX extraction", () => {
   it("lowers Array.map JSX into list Component IR", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View, useState } from '@astroforge/core';
+        import { Text, View, useState } from '@astralsight/astroforge-core';
         export default function Page() {
           const [items, setItems] = useState([{ id: 'ada', name: 'Ada' }]);
           return <View>{items.map((item, idx) => <View key={item.id}><Text>{item.name}</Text><Text>{idx}</Text></View>)}</View>;
@@ -418,7 +418,7 @@ describe("TSX extraction", () => {
   it("extracts exported page lifecycle object", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View, useState } from '@astroforge/core';
+        import { Text, View, useState } from '@astralsight/astroforge-core';
         export const lifecycle = {
           onInit() {
             console.log('page init');
@@ -444,7 +444,7 @@ describe("TSX extraction", () => {
   it("lowers useEffect into Vela lifecycle hooks", () => {
     const page = extractPageFromTsx(
       `
-        import { Text, View, useEffect, useState } from '@astroforge/core';
+        import { Text, View, useEffect, useState } from '@astralsight/astroforge-core';
         export default function Page() {
           const [message, setMessage] = useState('Ready');
           useEffect(() => {
@@ -470,7 +470,7 @@ describe("TSX extraction", () => {
   it("infers component props from TypeScript annotations", () => {
     const module = extractPageModuleFromTsx(
       `
-        import { Text, View } from '@astroforge/core';
+        import { Text, View } from '@astralsight/astroforge-core';
 
         interface CardProps {
           title: string;
@@ -511,7 +511,7 @@ describe("TSX extraction", () => {
     const page = extractPageFromTsx(
       `
         import './card.css';
-        import { View } from '@astroforge/core';
+        import { View } from '@astralsight/astroforge-core';
         export const styles = '.title { color: red; }';
         export default function Page() {
           return <View className="card" />;

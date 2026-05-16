@@ -1,5 +1,5 @@
 {
-  "name": "@astroforge/core",
+  "name": "@astralsight/astroforge-core",
   "version": "0.0.1",
   "description": "AstroForge Core: JSX runtime、Components、hooks。",
   "license": "MIT",

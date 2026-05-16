@@ -2,8 +2,8 @@
 
 AstroForge 把快应用运行时能力分成两层：
 
-- `@astroforge/core` 的组件和 API 类型定义，面向应用源码与编辑器提示；
-- `@astroforge/core/platform` 的能力目录，面向编译期校验和未来多平台后端。
+- `@astralsight/astroforge-core` 的组件和 API 类型定义，面向应用源码与编辑器提示；
+- `@astralsight/astroforge-core/platform` 的能力目录，面向编译期校验和未来多平台后端。
 
 这两层都不直接决定 Vela 后端的 JS 打印格式。现有 Vela 产物仍由 IR 与
 `astroforge-vela` 后端决定，能力目录只用于提前发现“不该面向当前平台使用”的
@@ -42,7 +42,7 @@ AstroForge 把快应用运行时能力分成两层：
 跨平台抽象或 AstroForge 聚合能力保持无平台前缀，例如：
 
 ```ts
-import { network, router, storage } from "@astroforge/core";
+import { network, router, storage } from "@astralsight/astroforge-core";
 ```
 
 Vela 专有能力使用 `vela*` 前缀导出，例如：
@@ -53,7 +53,7 @@ import {
   velaBrightness,
   velaInterconnect,
   VelaInternals,
-} from "@astroforge/core";
+} from "@astralsight/astroforge-core";
 ```
 
 前缀只影响源码侧的导入名。Vela 后端仍按真实模块名生成
@@ -62,7 +62,7 @@ import {
 
 ## 编译期校验
 
-`@astroforge/rsbuild-plugin` 在写出 IR 前会调用能力校验：
+`@astralsight/astroforge-rsbuild-plugin` 在写出 IR 前会调用能力校验：
 
 1. 读取 `manifest.features` 中显式声明的 feature；
 2. 扫描页面和组件模板里的内置渲染标签；

@@ -1,7 +1,7 @@
 {
-  "name": "astroforge",
+  "name": "@astralsight/astroforge",
   "version": "0.0.1",
-  "description": "AstroForge CLI — React/TSX 智能手表快应用工具链",
+  "description": "AstroForge CLI — React/TSX 智能手表快应用工具链的 Node 端薄壳。按 os/cpu 通过 optionalDependencies 自动下载预编译 Rust 二进制后转发。",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -32,11 +32,11 @@
     "node": ">=18.18"
   },
   "optionalDependencies": {
-    "@astroforge/cli-darwin-arm64": "0.0.1",
-    "@astroforge/cli-darwin-x64": "0.0.1",
-    "@astroforge/cli-linux-x64-gnu": "0.0.1",
-    "@astroforge/cli-linux-arm64-gnu": "0.0.1",
-    "@astroforge/cli-win32-x64-msvc": "0.0.1",
-    "@astroforge/cli-win32-arm64-msvc": "0.0.1"
+    "@astralsight/astroforge-cli-darwin-arm64": "0.0.1",
+    "@astralsight/astroforge-cli-darwin-x64": "0.0.1",
+    "@astralsight/astroforge-cli-linux-x64-gnu": "0.0.1",
+    "@astralsight/astroforge-cli-linux-arm64-gnu": "0.0.1",
+    "@astralsight/astroforge-cli-win32-x64-msvc": "0.0.1",
+    "@astralsight/astroforge-cli-win32-arm64-msvc": "0.0.1"
   }
 }

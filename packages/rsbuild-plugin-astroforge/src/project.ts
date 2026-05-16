@@ -157,7 +157,7 @@ const COMPONENT_RESOLUTION_EXTENSIONS = [".tsx", ".ts", ".jsx", ""];
 ///
 /// 遵循的规则：
 /// - 仅解析 `./` / `../` 起头的源说明符；裸名 import（如
-///   `@astroforge/core`、`some-lib`）不在此处处理。
+///   `@astralsight/astroforge-core`、`some-lib`）不在此处处理。
 /// - 解析顺序：`.tsx` → `.ts` → `.jsx` → 无后缀（已带后缀）→ 目录下
 ///   `index.tsx` / `index.ts`。这与 TypeScript bundler 默认行为一致。
 /// - 已加载过的文件在 `visitedFiles` 中标记，避免循环依赖死循环。

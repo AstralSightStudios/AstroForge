@@ -1,4 +1,4 @@
-import { Text, View, router } from "@astroforge/core";
+import { Text, View, router } from "@astralsight/astroforge-core";
 
 export default function IndexPage() {
   function goDetail() {

@@ -1,23 +1,25 @@
-# astroforge
+# @astralsight/astroforge
 
 AstroForge CLI：基于 Rust 的 React/TSX 智能手表快应用工具链入口。
 
 ## 安装
 
 ```bash
-pnpm add -D astroforge
+pnpm add -D @astralsight/astroforge
 # 或
-npm i -D astroforge
+npm i -D @astralsight/astroforge
 ```
+
+装下后可执行命令仍叫 `astroforge`（包名 ≠ 命令名）：
 
 包安装时，npm / pnpm 会按 `os` 与 `cpu`（Linux 上额外按 `libc`）从以下平台子包里挑出匹配本机的那一个，其它 optionalDependencies 自动跳过：
 
-- `@astroforge/cli-darwin-arm64`
-- `@astroforge/cli-darwin-x64`
-- `@astroforge/cli-linux-x64-gnu`
-- `@astroforge/cli-linux-arm64-gnu`
-- `@astroforge/cli-win32-x64-msvc`
-- `@astroforge/cli-win32-arm64-msvc`
+- `@astralsight/astroforge-cli-darwin-arm64`
+- `@astralsight/astroforge-cli-darwin-x64`
+- `@astralsight/astroforge-cli-linux-x64-gnu`
+- `@astralsight/astroforge-cli-linux-arm64-gnu`
+- `@astralsight/astroforge-cli-win32-x64-msvc`
+- `@astralsight/astroforge-cli-win32-arm64-msvc`
 
 主包自身只是 Node 端 shim，把 CLI 调用转发给装下的预编译二进制。
 
