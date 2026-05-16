@@ -5,6 +5,11 @@ node_modules/
 .tmp/
 *.tgz
 *.rpk
+
+# Fixture golden 解包目录：仅供本地人审，每次重建变动巨大且不被任何自动化测试
+# 消费（compat_goldens 只读 summary.json）。需要时通过 `astroforge test-compat
+# --official` 本地重生。
+fixtures/*/golden/*/unpacked/
 .DS_Store
 .idea/
 .vscode/*

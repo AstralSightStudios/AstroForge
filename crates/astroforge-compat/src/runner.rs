@@ -304,22 +304,19 @@ fn run_official_side(fixture: &Utf8Path) -> Result<BuildSideReport> {
 }
 
 fn find_aiot_bin() -> OsString {
-    if let Some(path) = env::var_os("ASTROFORGE_AIOT_BIN") {
-        return path;
-    }
-    let aiot_demo = Utf8Path::new("/Volumes/EXT0/GitHub/aiot-demo/node_modules/.bin/aiot");
-    if aiot_demo.exists() {
-        return aiot_demo.as_str().into();
-    }
-    "aiot".into()
+    env::var_os("ASTROFORGE_AIOT_BIN").unwrap_or_else(|| "aiot".into())
 }
 
+/// 为 aiot 子进程构造 PATH：若 `ASTROFORGE_AIOT_BIN` 指向一个具体文件，则把
+/// 其所在目录前置到现有 PATH，确保 aiot CLI 内部 spawn 同目录辅助二进制时
+/// 能命中。未设置该 env 时，沿用调用者的 PATH 不做改动。
 fn aiot_path_env() -> OsString {
     let mut paths = Vec::new();
-    let aiot_demo_bin =
-        std::path::PathBuf::from("/Volumes/EXT0/GitHub/aiot-demo/node_modules/.bin");
-    if aiot_demo_bin.exists() {
-        paths.push(aiot_demo_bin);
+    if let Some(bin) = env::var_os("ASTROFORGE_AIOT_BIN")
+        && let Some(dir) = std::path::Path::new(&bin).parent()
+        && !dir.as_os_str().is_empty()
+    {
+        paths.push(dir.to_path_buf());
     }
     if let Some(current) = env::var_os("PATH") {
         paths.extend(env::split_paths(&current));
@@ -421,13 +418,25 @@ fn collect_side_summary(unpacked: &Utf8Path) -> Result<SideSummary> {
 
     let manifest = fs::read_to_string(unpacked.join("manifest.json"))
         .ok()
-        .and_then(|source| normalize_json(&source).ok());
+        .and_then(|source| normalize_json(&source).ok())
+        .map(strip_nondeterministic_manifest_fields);
 
     Ok(SideSummary {
         files,
         manifest,
         runtime_calls,
     })
+}
+
+/// 抹除 `manifest.packageInfo`：该字段写入时间戳 / Node 版本 / arch / platform
+/// 等环境派生值，每次构建都不同；保留在落盘 summary 中会让 fixture goldens
+/// 每跑必 diff。比较函数 [`normalized_manifest`] 本就剔除该字段，写盘时一并
+/// 抹除让 git 历史保持稳定。
+fn strip_nondeterministic_manifest_fields(mut manifest: serde_json::Value) -> serde_json::Value {
+    if let Some(object) = manifest.as_object_mut() {
+        object.remove("packageInfo");
+    }
+    manifest
 }
 
 fn compare_sides(fixture: &Utf8Path) -> Result<ComparisonReport> {

@@ -327,13 +327,30 @@ impl PackageMetadata {
 ///
 /// 对应官方 `\`${value}\`` 的语义：字符串原样、布尔小写、数值标准、`null`
 /// 与缺省值显式为 `"undefined"`（与 `String(undefined)` 一致）。
+///
+/// 复合类型按 `String(value)` 在 JS 中的强制类型转换：
+/// - 对象 → 字面字符串 `"[object Object]"`（默认 `Object.prototype.toString`）；
+/// - 数组 → 元素 `String(x)` 后用 `","` 连接（默认 `Array.prototype.toString`），
+///   嵌套数组同款展开，对象元素也写成 `"[object Object]"`。
+///
+/// build.txt 字段当前均为标量（`originType` / `toolkit` / `timeStamp` / ...），
+/// 触发不到复合分支；保留实现是为后续若有人无意中把对象塞进字段时仍能写出
+/// 与 aiot-toolkit 等价的字节，而不是 `serde_json::Value::to_string` 产出的 JSON。
 fn value_to_text(value: &Value) -> String {
     match value {
         Value::String(s) => s.clone(),
         Value::Bool(b) => b.to_string(),
         Value::Number(n) => n.to_string(),
         Value::Null => "undefined".to_owned(),
-        other => other.to_string(),
+        Value::Object(_) => "[object Object]".to_owned(),
+        Value::Array(items) => items
+            .iter()
+            .map(|item| match item {
+                Value::Null => String::new(),
+                other => value_to_text(other),
+            })
+            .collect::<Vec<_>>()
+            .join(","),
     }
 }
 

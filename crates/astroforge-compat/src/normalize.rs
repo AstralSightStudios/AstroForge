@@ -29,7 +29,6 @@ pub fn normalize_json(source: &str) -> serde_json::Result<serde_json::Value> {
 pub fn runtime_call_sequence(source: &str) -> Vec<RuntimeCall> {
     let mut calls = Vec::new();
     let normalized = normalize_js(source);
-    let mut offset = 0;
     for marker in ["aiot.__ce__", "aiot.__cc__", "aiot.__ci__", "aiot.__cf__"] {
         let mut start = 0;
         while let Some(pos) = normalized[start..].find(marker) {
@@ -39,9 +38,7 @@ pub fn runtime_call_sequence(source: &str) -> Vec<RuntimeCall> {
             });
             start += pos + marker.len();
         }
-        offset += marker.len();
     }
-    let _ = offset;
     calls.sort_by_key(|call| call.offset);
     calls
 }
@@ -71,7 +68,24 @@ fn normalize_whitespace(source: &str) -> String {
 }
 
 fn strip_absolute_paths(source: &str) -> String {
-    source.replace("/Volumes/EXT0/GitHub/AstroForge/", "<workspace>/")
+    let Some(workspace) = workspace_root_prefix() else {
+        return source.to_owned();
+    };
+    source.replace(&workspace, "<workspace>/")
+}
+
+/// 工作区根目录，末尾带分隔符，便于按前缀整段替换。
+///
+/// 通过 `CARGO_MANIFEST_DIR`（即 `crates/astroforge-compat`）回溯两级取到根
+/// 目录；任何 checkout / CI 路径都能自适应。
+fn workspace_root_prefix() -> Option<String> {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir.parent()?.parent()?;
+    let mut prefix = root.to_string_lossy().into_owned();
+    if !prefix.ends_with('/') {
+        prefix.push('/');
+    }
+    Some(prefix)
 }
 
 #[cfg(test)]

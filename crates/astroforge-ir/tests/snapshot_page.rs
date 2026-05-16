@@ -135,9 +135,7 @@ fn style_table_with_multi_selectors_and_kebab_props() {
 fn asset_ref_shape() {
     let asset = AssetRef {
         path: "/common/logo.png".into(),
-        source_path:
-            "/Volumes/EXT0/GitHub/AstroForge/fixtures/01-hello-text/astroforge/src/common/logo.png"
-                .into(),
+        source_path: "<workspace>/fixtures/01-hello-text/astroforge/src/common/logo.png".into(),
         digest: "0123456789abcdef0123456789abcdef01234567".into(),
     };
     assert_json_snapshot!("asset_ref_shape", asset);

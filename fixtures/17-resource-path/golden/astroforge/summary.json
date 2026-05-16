@@ -32,15 +32,7 @@
         }
       }
     },
-    "minAPILevel": 1,
-    "packageInfo": {
-      "toolkit": "0.0.1",
-      "timeStamp": "2026-05-16T08:20:23.002867Z",
-      "node": "unknown",
-      "platform": "darwin",
-      "arch": "arm64",
-      "component": true
-    }
+    "minAPILevel": 1
   },
   "runtime_calls": [
     {
