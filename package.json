@@ -16,7 +16,8 @@
     "test:js": "vitest run",
     "test:rust": "cargo test --workspace",
     "fmt": "cargo fmt --all && pnpm -r exec prettier --write .",
-    "lint": "cargo clippy --workspace --all-targets -- -D warnings"
+    "lint": "cargo clippy --workspace --all-targets -- -D warnings",
+    "release:cli": "bash scripts/release-cli.sh"
   },
   "devDependencies": {
     "@rsbuild/core": "^2.0.6",
