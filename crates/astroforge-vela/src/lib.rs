@@ -31,6 +31,11 @@ pub struct VelaBuildOutput {
     /// 序列化后的 manifest 文本，对应产物 `manifest.json`。
     pub manifest_json: String,
 
+    /// 设备级 manifest 变体。键为设备名（如 `"watch"`、`"tv"`），值为
+    /// `manifest-<device>.json` 的完整文本，已应用 `config-<device>.json`
+    /// 覆盖。仅在 `Manifest::device_type_list` 非空时生成。
+    pub device_manifests: indexmap::IndexMap<String, String>,
+
     /// 包名，供打包器生成默认文件名与诊断信息。
     pub package: String,
 

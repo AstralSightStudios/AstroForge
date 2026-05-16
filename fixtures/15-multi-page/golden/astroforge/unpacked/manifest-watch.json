@@ -4,6 +4,16 @@
   "versionName": "1.0.0",
   "versionCode": 1,
   "minPlatformVersion": 1200,
+  "icon": "/common/logo.png",
+  "simulationVersion": "default",
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [],
+  "config": {
+    "logLevel": "log",
+    "designWidth": "device-width"
+  },
   "router": {
     "entry": "pages/index",
     "pages": {
@@ -14,15 +24,5 @@
         "component": "index"
       }
     }
-  },
-  "icon": "/common/logo.png",
-  "simulationVersion": "default",
-  "deviceTypeList": [
-    "watch"
-  ],
-  "features": [],
-  "config": {
-    "logLevel": "log",
-    "designWidth": "device-width"
   }
 }

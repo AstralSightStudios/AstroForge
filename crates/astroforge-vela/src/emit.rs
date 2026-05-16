@@ -33,6 +33,7 @@ pub fn emit_build_output(ir: &IrDocument, lowered: LoweredDocument) -> Result<Ve
         app_js: emit_app_js(&lowered.manifest_json, &lowered.app.script_object),
         page_js,
         manifest_json: lowered.manifest_json,
+        device_manifests: lowered.device_manifests,
         package: ir.manifest.package.clone(),
         assets: ir.assets.clone(),
     })

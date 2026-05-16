@@ -18,6 +18,7 @@ use serde_json::{Map, Value};
 #[derive(Debug, Clone)]
 pub struct LoweredDocument {
     pub manifest_json: String,
+    pub device_manifests: IndexMap<String, String>,
     pub app: LoweredApp,
     pub pages: IndexMap<String, LoweredPage>,
     pub components: IndexMap<String, LoweredComponent>,
@@ -59,6 +60,7 @@ pub struct SystemRequire {
 /// 将 Page IR 下沉为 Vela 后端模型。
 pub fn lower_document(ir: &IrDocument) -> Result<LoweredDocument> {
     let manifest_json = manifest_to_vela_json(&ir.manifest)?;
+    let device_manifests = lower_device_manifests(&ir.manifest)?;
     let app = LoweredApp {
         script_object: app_script_object(&ir.app),
     };
@@ -81,6 +83,7 @@ pub fn lower_document(ir: &IrDocument) -> Result<LoweredDocument> {
 
     Ok(LoweredDocument {
         manifest_json,
+        device_manifests,
         app,
         pages,
         components,
@@ -222,6 +225,36 @@ fn lower_selector(selector: &Selector) -> Vec<(u8, String)> {
 }
 
 fn manifest_to_vela_json(manifest: &Manifest) -> Result<String> {
+    let mut root = manifest_base_object(manifest)?;
+    // `minAPILevel` 由 aiot-toolkit 在 `updateManifest` 阶段追加在最后，
+    // 此处保持同样的位置以保证字段顺序与官方产物一致。`packageInfo` 不在此
+    // 处注入，由 packager 在签名前补写，与官方流程一致。
+    root.insert("minAPILevel".into(), Value::from(1));
+
+    let mut s = serde_json::to_string_pretty(&Value::Object(root))?;
+    s.push('\n');
+    Ok(s)
+}
+
+/// 生成所有 `manifest-<device>.json` 文本。
+///
+/// 与 aiot-toolkit 一致：每个 `deviceTypeList` 条目对应一份 manifest 变体，
+/// 内容为源 manifest 经 `lodash.merge` 与可选的 `config-<device>.json` 合并
+/// 后的结果。MVP 暂未引入配置覆盖渠道，故等价于源 manifest 本身（不包含
+/// `minAPILevel` 与 `packageInfo` 这两个 packager / build pipeline 注入项）。
+pub fn lower_device_manifests(manifest: &Manifest) -> Result<IndexMap<String, String>> {
+    let mut out = IndexMap::new();
+    for device in &manifest.device_type_list {
+        let base = manifest_base_object(manifest)?;
+        let mut text = serde_json::to_string_pretty(&Value::Object(base))?;
+        text.push('\n');
+        out.insert(device.clone(), text);
+    }
+    Ok(out)
+}
+
+/// 按官方源 manifest 的字段顺序生成基础对象，不包含任何打包阶段注入字段。
+fn manifest_base_object(manifest: &Manifest) -> Result<Map<String, Value>> {
     let mut root = Map::new();
     root.insert("package".into(), Value::String(manifest.package.clone()));
     root.insert("name".into(), Value::String(manifest.name.clone()));
@@ -234,7 +267,6 @@ fn manifest_to_vela_json(manifest: &Manifest) -> Result<String> {
         "minPlatformVersion".into(),
         Value::from(manifest.min_platform_version),
     );
-    root.insert("minAPILevel".into(), Value::from(1));
     root.insert("icon".into(), Value::String(manifest.icon.clone()));
     if let Some(simulation_version) = &manifest.simulation_version {
         root.insert(
@@ -268,9 +300,7 @@ fn manifest_to_vela_json(manifest: &Manifest) -> Result<String> {
     router.insert("pages".into(), Value::Object(pages));
     root.insert("router".into(), Value::Object(router));
 
-    let mut s = serde_json::to_string_pretty(&Value::Object(root))?;
-    s.push('\n');
-    Ok(s)
+    Ok(root)
 }
 
 fn json_value_source<T: Serialize>(value: &T) -> String {
@@ -351,6 +381,23 @@ mod tests {
         assert!(json.contains("\"minPlatformVersion\""));
         assert!(json.contains("\"deviceTypeList\""));
         assert!(!json.contains("version_name"));
+
+        // `minAPILevel` 必须紧跟 `router` 之后，与 aiot-toolkit 的 `updateManifest`
+        // 行为保持一致；它是 build pipeline 追加项，不应出现在源字段之间。
+        let router_pos = json.find("\"router\"").expect("router field present");
+        let min_api_pos = json
+            .find("\"minAPILevel\"")
+            .expect("minAPILevel field present");
+        assert!(
+            min_api_pos > router_pos,
+            "minAPILevel 应在 router 之后追加"
+        );
+
+        let devices = lower_device_manifests(&manifest).unwrap();
+        assert_eq!(devices.keys().collect::<Vec<_>>(), vec![&"watch".to_owned()]);
+        let watch = devices.get("watch").unwrap();
+        assert!(!watch.contains("\"minAPILevel\""));
+        assert!(!watch.contains("\"packageInfo\""));
     }
 
     #[test]

@@ -1,78 +1,84 @@
-# Vela Backend, Packager, and Compat Runner
+# Vela 后端、Packager 与 Compat Runner
 
-This document describes the executable backend path that starts from an
-AstroForge IR document and ends in a Vela-compatible debug `.rpk`.
+本文档面向所有维护 AstroForge Vela target 产物链路的工程师，描述从
+`astroforge_ir::page::IrDocument` 出发到生成可在 Vela 设备运行时加载的 `.rpk`
+为止的执行路径，并说明对照测试体系的入口与契约。
 
-## Build Pipeline
+## 构建流水线
 
-`astroforge build --target vela` performs four steps:
+`astroforge build --target vela` 执行四步：
 
-1. Runs `pnpm exec rsbuild build` in the project root unless `--skip-rsbuild`
-   or `--ir <path>` is provided.
-2. Loads `node_modules/.cache/astroforge/ir-document.json` through
-   `astroforge_ir::io`, including `IR_VERSION` validation.
-3. Lowers the IR with `astroforge-vela` into Vela-compatible JS modules.
-4. Writes an unpacked package directory and a debug `.rpk` through
-   `astroforge-packager`.
+1. 在项目根目录运行 `pnpm exec rsbuild build`，除非传入 `--skip-rsbuild` 或
+   `--ir <path>`。
+2. 通过 `astroforge_ir::io::load_ir_from_path` 加载
+   `node_modules/.cache/astroforge/ir-document.json`，并在加载阶段强制校验
+   `IR_VERSION`，避免后端读到不兼容的 IR。
+3. 调用 `astroforge-vela` 将 Page IR 下沉为 Vela 兼容的 JS 模块集合。
+4. 调用 `astroforge-packager` 写出 unpacked 目录与签名后的 debug `.rpk`。
 
-The default output path is:
+默认产物路径：
 
 ```text
 dist/<package>.debug.rpk
 dist/unpacked/
 ```
 
-`astroforge release --target vela` currently uses the same packaging path with a
-`.release.rpk` filename. The packager defaults to a development signing identity
-compatible with aiot-toolkit's fallback behavior. Production signing material can
-be supplied with `ASTROFORGE_VELA_PRIVATE_KEY` and
-`ASTROFORGE_VELA_CERTIFICATE`; both variables must be set together.
+`astroforge release --target vela` 当前复用同一打包路径，仅将文件名后缀替换为
+`.release.rpk`。packager 默认使用与 aiot-toolkit fallback 行为兼容的开发用签名
+身份；生产签名材料可通过 `ASTROFORGE_VELA_PRIVATE_KEY` 与
+`ASTROFORGE_VELA_CERTIFICATE` 注入，两个变量必须同时设置。
 
-## Vela JS Output
+## Vela 后端产物
 
-The Vela backend emits:
+`astroforge-vela` 生成以下文件：
 
-- `manifest.json` with Vela field names such as `versionName`,
-  `minPlatformVersion`, and `deviceTypeList`.
-- `app.js` with the module wrapper, manifest module, app lifecycle object, and
-  `$translateStyle$` registration.
-- `pages/<route>/<component>.js` with page script, template, style table, system
-  API bridge imports, component registrations, and VM data normalization.
-- Static assets copied to their package paths, for example `common/logo.svg`.
+- `manifest.json`，所有字段名均与 Vela 厂商格式一比一对齐
+  （`versionName`、`minPlatformVersion`、`deviceTypeList` 等）。
+- `manifest-<device>.json`，对 `deviceTypeList` 中每个设备生成一份。内容等价
+  于源 manifest 与可选 `config-<device>.json` 经 `lodash.merge` 合并后的结果，
+  不包含 `minAPILevel` 与 `packageInfo` 这两个 packager / build pipeline 注入
+  项。
+- `app.js`，包含模块外壳、`manifest.json` 的 webpack 模块体、`app` 生命周期
+  对象与 `$translateStyle$` 的注册逻辑。
+- `pages/<route>/<component>.js`，包含页面 script 对象、`$app_template$`、样
+  式表、`system.*` 桥接 require、自定义组件注册以及 VM data 规范化逻辑。
+- 静态资源按原路径拷贝（如 `common/logo.svg`）。
 
-The template printer maps Component IR to Vela calls:
+模板打印器将 Component IR 映射为以下 Vela 运行时调用：
 
-- Built-in nodes: `aiot.__ce__`.
-- Custom components: `aiot.__cc__`.
-- Conditional branches: `aiot.__ci__`.
-- List rendering: `aiot.__cf__`.
+- 内置元素：`aiot.__ce__`。
+- 自定义组件：`aiot.__cc__`。
+- 条件分支：`aiot.__ci__`。
+- 列表渲染：`aiot.__cf__`。
 
-The output is designed for ABI-level comparison. Exact whitespace is not part
-of the compatibility contract.
+产物面向 ABI 级等价：可读性 / 空白字符不在兼容契约范围内，对照测试基于归一
+化后的 AST 与运行时调用序列。
 
-## Packager Commands
+## Packager 命令
 
-Inspect a package:
+检视一个 `.rpk` 包的清单与 manifest：
 
 ```bash
 astroforge inspect rpk dist/com.example.debug.rpk
 ```
 
-Unpack a package:
+解包至目录：
 
 ```bash
 astroforge unpack dist/com.example.debug.rpk --out .tmp/unpacked
 ```
 
-The current Vela debug package follows the aiot-toolkit container layout:
-`META-INF/CERT`, `manifest-watch.json`, `manifest.json`, `app.js`, page modules,
-assets, and `META-INF/build.txt` are written in the same structural order as
-official output.
+包内文件按照 aiot-toolkit `ZipUtil.getPriorities` 的优先级表排序：
+`META-INF/CERT` → `i18n/*.json` → `manifest-<device>.json` →
+`manifest.json` → `app.js` → 入口路由的页面文件 → `common/*` →
+其余 `.js` → `META-INF/build.txt`。该顺序由
+`astroforge_packager::sort_package_files` 实现，并由
+`priority_sort_matches_aiot_toolkit` 单元测试锁定。
 
 ## Compat Runner
 
-`astroforge test-compat` discovers `fixtures/*/astroforge`, builds each project,
-and writes the AstroForge-side golden output:
+`astroforge test-compat` 发现 `fixtures/*/astroforge`，对每个 fixture 构建并
+将 AstroForge 侧 golden 写入：
 
 ```text
 fixtures/<fixture>/golden/astroforge/app.rpk
@@ -80,17 +86,15 @@ fixtures/<fixture>/golden/astroforge/unpacked/
 fixtures/<fixture>/golden/astroforge/summary.json
 ```
 
-`summary.json` records the file list, normalized manifest, and per-JS-file
-runtime call sequence for `aiot.__ce__` / `__cc__` / `__ci__` / `__cf__`.
+`summary.json` 内容包括：包内文件列表、归一化后的 manifest、每个 JS 文件中
+`aiot.__ce__` / `__cc__` / `__ci__` / `__cf__` 的调用序列。
 
-By default the official `aiot-toolkit` side is not executed. Use:
+默认不会触发官方 `aiot-toolkit` 侧构建。带上 `--official` 即可让 runner 同时
+构建每个 fixture 的 `official/` 子项目，并写入对照 golden：
 
 ```bash
 astroforge test-compat --official
 ```
-
-to additionally invoke the `official/` project for each fixture. That mode
-writes the official-side output to:
 
 ```text
 fixtures/<fixture>/golden/aiot/app.rpk
@@ -98,47 +102,55 @@ fixtures/<fixture>/golden/aiot/unpacked/
 fixtures/<fixture>/golden/aiot/summary.json
 ```
 
-The command exits with an error if any comparison bucket has a non-zero
-`diff_count`, including the RPK container structure bucket.
+任一对照桶（files / manifest / runtime_calls / rpk_structure）的
+`diff_count` 非零时，命令以非零退出码结束；`rpk_structure` 桶覆盖 RPK 容器
+层结构。
 
-`ASTROFORGE_AIOT_BIN` can be used to point at a specific `aiot-toolkit` binary;
-otherwise the runner falls back to the aiot-demo workspace path used for local
-research and then to `aiot` in `PATH`.
+定位 aiot-toolkit 可执行文件的优先级：环境变量 `ASTROFORGE_AIOT_BIN` >
+`/Volumes/EXT0/GitHub/aiot-demo/node_modules/.bin/aiot` >
+`PATH` 中的 `aiot`。
 
-## RPK Container Contract
+`cargo test -p astroforge-compat --test compat_goldens` 提供轻量级回归网：直
+接对所有 fixture 已提交的 `golden/*/summary.json` 做 files / manifest /
+runtime_calls 三级 diff，不再触发 pnpm / aiot-toolkit，适合在无厂商工具链的
+CI 环境中使用。
 
-The compat report records zip-level metadata in `comparison.rpk_structure`.
-AstroForge's Vela packager now matches the official structural contract checked
-by this bucket:
+## RPK 容器契约
 
-- Uses DEFLATE level 9 for files and stored entries for directories.
-- Adds a zip archive comment containing toolkit metadata such as `toolkit`,
-  `timeStamp`, `node`, `platform`, `arch`, and `component`.
-- Emits explicit directory entries such as `META-INF/`, `pages/`,
-  `pages/index/`, and `common/`.
-- Emits `manifest-watch.json` before `manifest.json`.
-- Emits `META-INF/build.txt` with toolkit metadata.
-- Emits `META-INF/CERT`, itself a zip containing `hash.json` with SHA-256
-  digests for package files.
-- Signs both `META-INF/CERT` and the outer `.rpk` with the Vela
-  `RPK Sig Block 42` format. The compat runner records signature presence, KV
-  IDs, and size-field consistency for both layers.
-- Sorts entries using the priority order implemented by aiot-toolkit
-  `ZipUtil.getPriorities`: cert, secondary manifests, `manifest.json`,
-  `app.js`, entry page files, `common/`, remaining JS files, then
-  `META-INF/build.txt`.
+`astroforge test-compat --official` 在 `comparison.rpk_structure` 桶中记录
+zip 容器级元数据。AstroForge 的 Vela packager 与官方契约保持以下一致：
 
-This is a structural contract, not byte-for-byte identity. The JS module bytes
-are produced by AstroForge and therefore differ from aiot-toolkit. Dynamic
-metadata such as timestamps, toolkit versions, and signatures are normalized by
-compat checks; the structural requirement is that the same container features
-and signature block shape are present.
+- 文件条目使用 DEFLATE level 9 压缩，目录条目使用 Stored。
+- 外层 zip 设置 archive comment 为 JSON 形式的打包元数据（包含 `toolkit`、
+  `timeStamp`、`node`、`platform`、`arch`、`component` 字段）。
+- 显式写入目录条目（如 `META-INF/`、`pages/`、`pages/index/`、`common/`）。
+- 为 `manifest.deviceTypeList` 中的每个设备写入 `manifest-<device>.json`，
+  位置严格排在 `manifest.json` 之前。每份变体等价于源 manifest 与可选
+  `config-<device>.json` 的 `lodash.merge` 结果，不携带 `minAPILevel` /
+  `packageInfo`（这两个字段是 packager / build pipeline 对主 manifest 的注
+  入项，不属于 device manifest）。
+- `META-INF/build.txt` 以 `\n` 分隔字段，**不带尾随换行**，与 aiot-toolkit
+  `Object.entries(comment).map(...).join('\n')` 的字节序列一致。
+- `META-INF/CERT` 自身是一个内层 zip，包含 `hash.json`：记录所有非 CERT
+  文件的 SHA-256 摘要。
+- `META-INF/CERT` 与外层 `.rpk` 都按 Vela `RPK Sig Block 42` 规范追加签名
+  块；compat runner 记录两侧签名块的存在性、KV ID 列表与 size 字段一致性。
+  内层 `META-INF/CERT` zip 的 comment 必须为空字符串（与 aiot-toolkit
+  `JSZip.loadAsync` → `generateAsync({ comment: null })` 的二次序列化语义
+  一致），仅外层 rpk 持有 JSON 元数据 comment。
+- 文件排序严格按 aiot-toolkit `ZipUtil.getPriorities`：CERT、其它 manifest
+  变体、`manifest.json`、`app.js`、入口路由页面文件、`common/`、其余 JS
+  文件、`META-INF/build.txt`。
 
-## Device Hooks
+该契约只约束**结构**而非字节级一致：JS 模块文本由 AstroForge 自主产出，与
+aiot-toolkit 不可能逐字节相同。时间戳、工具链版本、签名等动态元数据由 compat
+归一化层抹平；结构层只要求容器特性与签名块形态匹配。
 
-`astroforge install <rpk>` validates the package path and then executes
-`ASTROFORGE_INSTALL_CMD` if configured. The command may contain `{rpk}`, which
-is replaced with the package path.
+## 设备钩子
 
-`astroforge log` executes `ASTROFORGE_LOG_CMD` if configured, otherwise falls
-back to `adb logcat` when `adb` is available in `PATH`.
+`astroforge install <rpk>` 校验 rpk 路径存在后，调用环境变量
+`ASTROFORGE_INSTALL_CMD` 中配置的命令。该命令字符串中可包含字面量 `{rpk}`，
+runner 会替换为实际 rpk 路径。
+
+`astroforge log` 优先调用 `ASTROFORGE_LOG_CMD`；未配置且 `PATH` 中存在
+`adb` 时退回到 `adb logcat`；均不可用时输出原因并以无操作结束。

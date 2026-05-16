@@ -1,4 +1,4 @@
-# Vela JS Runtime ABI
+# Vela JS 运行时 ABI 契约
 
 > **数据来源**：`aiot-toolkit@2.0.5` 与 `@aiot-toolkit/parser@2.0.5` 源码，
 > 配合 `aiot-demo` 项目的实际构建产物（运行于 Vela 设备运行时）。本文档
@@ -322,7 +322,7 @@ __opts__: {
 下的 `CiTranslate.js` 与 `CfTranslate.js`。MVP 暂不涵盖；后续实现时单独成
 文。
 
-## 8. Manifest
+## 8. Manifest 形态
 
 `manifest.json` 形态（取自 `aiot-demo`）：
 

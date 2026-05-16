@@ -4,14 +4,6 @@
   "versionName": "1.0.0",
   "versionCode": 1,
   "minPlatformVersion": 1200,
-  "router": {
-    "entry": "pages/index",
-    "pages": {
-      "pages/index": {
-        "component": "index"
-      }
-    }
-  },
   "icon": "/common/logo.png",
   "simulationVersion": "default",
   "deviceTypeList": [
@@ -21,5 +13,13 @@
   "config": {
     "logLevel": "log",
     "designWidth": "device-width"
+  },
+  "router": {
+    "entry": "pages/index",
+    "pages": {
+      "pages/index": {
+        "component": "index"
+      }
+    }
   }
 }

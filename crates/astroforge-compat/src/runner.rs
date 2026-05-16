@@ -454,6 +454,35 @@ fn compare_sides(fixture: &Utf8Path) -> Result<ComparisonReport> {
     })
 }
 
+/// 仅对照两侧已落地的 `summary.json`，跳过容器层与 rpk 重建。
+///
+/// 设计用于 `cargo test` 静态校验：CI 上没有 pnpm / aiot-toolkit 也能跑通
+/// files / manifest / runtime_calls 三级 diff。容器层 rpk_structure 留给
+/// `astroforge test-compat --official` 在带工具链的环境中执行。
+pub fn compare_summaries_only(fixture: &Utf8Path) -> Result<SummaryComparison> {
+    let astroforge = read_summary(&fixture.join("golden/astroforge/summary.json"))?;
+    let official = read_summary(&fixture.join("golden/aiot/summary.json"))?;
+    Ok(SummaryComparison {
+        files: compare_json(&normalized_files(&astroforge), &normalized_files(&official))?,
+        manifest: compare_json(
+            &normalized_manifest(astroforge.manifest.clone()),
+            &normalized_manifest(official.manifest.clone()),
+        )?,
+        runtime_calls: compare_json(
+            &runtime_callee_sequence(&astroforge),
+            &runtime_callee_sequence(&official),
+        )?,
+    })
+}
+
+/// `compare_summaries_only` 的输出。`rpk_structure` 缺席是设计行为，详见函数文档。
+#[derive(Debug, Clone, Serialize)]
+pub struct SummaryComparison {
+    pub files: DiffBucket,
+    pub manifest: DiffBucket,
+    pub runtime_calls: DiffBucket,
+}
+
 fn inspect_rpk_structure(path: &Utf8Path) -> Result<RpkStructureSummary> {
     let bytes = fs::read(path).with_context(|| format!("打开 rpk 失败：{path}"))?;
     let archive_size = bytes.len() as u64;

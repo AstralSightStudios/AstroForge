@@ -14,7 +14,6 @@
     "versionName": "1.0.0",
     "versionCode": 1,
     "minPlatformVersion": 1200,
-    "minAPILevel": 1,
     "icon": "/common/logo.svg",
     "simulationVersion": "default",
     "deviceTypeList": [
@@ -33,9 +32,10 @@
         }
       }
     },
+    "minAPILevel": 1,
     "packageInfo": {
       "toolkit": "0.0.1",
-      "timeStamp": "2026-05-16T05:09:07.297059Z",
+      "timeStamp": "2026-05-16T05:30:53.076052Z",
       "node": "unknown",
       "platform": "darwin",
       "arch": "arm64",

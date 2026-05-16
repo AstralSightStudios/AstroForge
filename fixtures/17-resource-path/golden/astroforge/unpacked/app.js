@@ -79,7 +79,7 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
       return (function() {
         var __webpack_require__ = createRequire({
           "./src/manifest.json": function(module) {
-            module.exports = JSON.parse("{\n  \"package\": \"com.astroforge.fixture.resource\",\n  \"name\": \"fixture-17-resource-path\",\n  \"versionName\": \"1.0.0\",\n  \"versionCode\": 1,\n  \"minPlatformVersion\": 1200,\n  \"minAPILevel\": 1,\n  \"icon\": \"/common/logo.svg\",\n  \"simulationVersion\": \"default\",\n  \"deviceTypeList\": [\n    \"watch\"\n  ],\n  \"features\": [],\n  \"config\": {\n    \"logLevel\": \"log\",\n    \"designWidth\": \"device-width\"\n  },\n  \"router\": {\n    \"entry\": \"pages/index\",\n    \"pages\": {\n      \"pages/index\": {\n        \"component\": \"index\"\n      }\n    }\n  }\n}\n");
+            module.exports = JSON.parse("{\n  \"package\": \"com.astroforge.fixture.resource\",\n  \"name\": \"fixture-17-resource-path\",\n  \"versionName\": \"1.0.0\",\n  \"versionCode\": 1,\n  \"minPlatformVersion\": 1200,\n  \"icon\": \"/common/logo.svg\",\n  \"simulationVersion\": \"default\",\n  \"deviceTypeList\": [\n    \"watch\"\n  ],\n  \"features\": [],\n  \"config\": {\n    \"logLevel\": \"log\",\n    \"designWidth\": \"device-width\"\n  },\n  \"router\": {\n    \"entry\": \"pages/index\",\n    \"pages\": {\n      \"pages/index\": {\n        \"component\": \"index\"\n      }\n    }\n  },\n  \"minAPILevel\": 1\n}\n");
           }
         });
         installTranslateStyle(__webpack_require__.g);
