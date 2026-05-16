@@ -22,7 +22,8 @@
 - 将 `src/app.tsx` 的 default export 对象方法写入 IR 根节点的 `app.lifecycle`。
 - 提取同一页面模块内的 PascalCase 本地组件，并在 Page IR 中记录组件导入关系。
 - 提取页面模块导出的静态 `style` / `styles` 字符串，转换为 Style IR。
-- 收集静态 `Image.src` 指向的项目内资源，并写入 IR 根节点的 `assets`。
+- 收集 manifest icon、静态 `Image.src`、静态 CSS `url(...)` 指向的项目内资
+  源，并写入 IR 根节点的 `assets`。
 - 在 Rsbuild `onBeforeBuild` / `onBeforeDevCompile` 阶段写出
   `node_modules/.cache/astroforge/ir-document.json`。
 - 通过 `modifyRsbuildConfig` 设置 Rsbuild entry，并配置 SWC automatic JSX
@@ -95,6 +96,8 @@ Phase 2 的 TSX 提取器以稳定 IR 为目标，当前只接受可直接映射
 | fixture                  | 覆盖点                                     |
 | ------------------------ | ------------------------------------------ |
 | `01-hello-text`          | 静态文本和最小 manifest / route 生成       |
+| `02-static-style`        | 静态样式提取与 `$app_style$` 下沉          |
+| `03-image-asset`         | manifest icon 与页面图片资源收集           |
 | `04-click-event`         | `onClick` 事件绑定与页面方法提取           |
 | `05-use-state-counter`   | `useState` 初值、文本绑定、setter lowering |
 | `06-conditional-render`  | 三元表达式条件渲染                         |

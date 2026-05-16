@@ -60,10 +60,7 @@ fn save_then_load_compact_roundtrips() {
     save_ir_to_path(&path, &doc).unwrap();
 
     let raw = std::fs::read_to_string(&path).unwrap();
-    assert!(
-        !raw.contains('\n'),
-        "紧凑形态不应包含换行符，实际：{raw}",
-    );
+    assert!(!raw.contains('\n'), "紧凑形态不应包含换行符，实际：{raw}",);
 
     let back = load_ir_from_path(&path).unwrap();
     assert_eq!(
@@ -113,10 +110,8 @@ fn load_rejects_version_mismatch() {
 #[test]
 fn save_creates_missing_parent_dirs() {
     let dir = tempfile::tempdir().unwrap();
-    let path = Utf8PathBuf::from_path_buf(
-        dir.path().join("nested").join("more").join("ir.json"),
-    )
-    .unwrap();
+    let path =
+        Utf8PathBuf::from_path_buf(dir.path().join("nested").join("more").join("ir.json")).unwrap();
 
     save_ir_to_path(&path, &sample_doc()).unwrap();
     assert!(path.exists(), "中间目录应自动创建");

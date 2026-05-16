@@ -376,9 +376,10 @@ META-INF/
   CERT                   hash.json 的签名 zip
 ```
 
-`hash.json` 由 `@aiot-toolkit/aiotpack` 的 `signature/Signer.js` 生成，将
-在 Phase 4 中逆向。Phase 0–3 输出未签名 debug `.rpk`，依赖模拟器与设备的
-调试模式宽容策略。
+`hash.json` 记录包内文件的 SHA-256 摘要。`META-INF/CERT` 与外层 `.rpk`
+随后都会插入 Vela 自定义 `RPK Sig Block 42` 签名块；该签名块位于 zip local
+file 区域与 central directory 之间，并同步更新 EOCD 中的 central directory
+offset。AstroForge 的 packager 以这一结构作为 Vela 目标的默认输出契约。
 
 ## 10. AstroForge 实现契约
 

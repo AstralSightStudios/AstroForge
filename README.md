@@ -21,6 +21,15 @@
 - Phase 2：`@astroforge/rsbuild-plugin` 已能从静态文本、点击事件、
   `useState` counter、条件渲染、列表渲染和生命周期 fixtures 的 TSX 页面生成
   符合 `docs/ir-document.schema.json` 的 IR 文件。
+- Phase 3：`astroforge-vela` 已能将 Page IR 下沉并打印 Vela-compatible
+  `app.js`、页面 JS、样式表、事件、系统 API bridge、条件与列表包装调用。
+- Phase 4：`astroforge-packager` 已能生成带 Vela 签名块的 debug `.rpk`，并
+  提供 `inspect rpk` 与 `unpack`。
+- Phase 5：`astroforge test-compat --official` 已能批量驱动 18 个 fixtures，
+  同时写出 `golden/astroforge/` 与 `golden/aiot/` 产物，并比较文件结构、
+  manifest、运行时调用序列与 RPK 容器结构诊断信息。
+- Phase 6：`init`、`dev`、`build`、`release`、`install`、`log` 已接入基础
+  命令行为；设备安装和日志通过环境变量适配器接入。
 
 常用验证命令：
 
@@ -28,5 +37,10 @@
 pnpm check:js
 pnpm test:js
 cargo test --workspace
-pnpm --dir fixtures/01-hello-text/astroforge exec rsbuild build
+cargo clippy --workspace --all-targets -- -D warnings
+pnpm --dir fixtures/01-hello-text/astroforge exec astroforge build --target vela
+astroforge test-compat
+astroforge test-compat --official
 ```
+
+更多后端与打包细节见 `docs/vela-backend-packager.md`。

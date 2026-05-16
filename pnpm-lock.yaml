@@ -46,6 +46,38 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/cli-js
 
+  fixtures/02-static-style/astroforge:
+    dependencies:
+      '@astroforge/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+    devDependencies:
+      '@astroforge/rsbuild-plugin':
+        specifier: workspace:*
+        version: link:../../../packages/rsbuild-plugin-astroforge
+      '@rsbuild/core':
+        specifier: ^2.0.6
+        version: 2.0.6
+      astroforge:
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+
+  fixtures/03-image-asset/astroforge:
+    dependencies:
+      '@astroforge/core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+    devDependencies:
+      '@astroforge/rsbuild-plugin':
+        specifier: workspace:*
+        version: link:../../../packages/rsbuild-plugin-astroforge
+      '@rsbuild/core':
+        specifier: ^2.0.6
+        version: 2.0.6
+      astroforge:
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+
   fixtures/04-click-event/astroforge:
     dependencies:
       '@astroforge/core':

@@ -94,8 +94,16 @@ describe("AstroForge project compiler", () => {
     const generated = JSON.parse(readFileSync(outFile, "utf8"));
     const expected = readRustFixtureSnapshot();
 
-    expect(result.document).toEqual(expected);
-    expect(generated).toEqual(expected);
+    expect(withoutAssets(result.document)).toEqual(expected);
+    expect(withoutAssets(generated)).toEqual(expected);
+    expect(result.document.assets).toEqual([
+      {
+        path: "/common/logo.png",
+        source_path: resolve(fixtureRoot, "src/common/logo.png"),
+        digest: "dceecceee51e11be0f9fadd0e6fef0cafb5787e0",
+      },
+    ]);
+    expect(generated.assets).toEqual(result.document.assets);
     expect(validateIrDocument(generated)).toBe(true);
   });
 
@@ -420,7 +428,6 @@ describe("AstroForge project compiler", () => {
               tag: "image",
               attrs: {
                 src: { kind: "static", value: "/common/logo.svg" },
-                alt: { kind: "static", value: "AstroForge" },
               },
             },
           },
@@ -433,6 +440,18 @@ describe("AstroForge project compiler", () => {
   it("emits css-edge-cases IR with parsed style rules", () => {
     const { document } = compileFixture(cssFixtureRoot);
 
+    expect(document.assets).toEqual([
+      {
+        path: "/common/logo.png",
+        source_path: resolve(cssFixtureRoot, "src/common/logo.png"),
+        digest: "dceecceee51e11be0f9fadd0e6fef0cafb5787e0",
+      },
+      {
+        path: "/common/fixture.woff",
+        source_path: resolve(cssFixtureRoot, "src/common/fixture.woff"),
+        digest: "3c21209a8c880a523ae59c2327aff5b888be4deb",
+      },
+    ]);
     expect(document.pages["pages/index"].style.rules).toEqual([
       {
         selectors: [
@@ -491,6 +510,13 @@ function readRustFixtureSnapshot() {
     throw new Error("无法解析 fixture 01 Rust snapshot");
   }
   return JSON.parse(match[1]);
+}
+
+function withoutAssets(document: any) {
+  return {
+    ...document,
+    assets: [],
+  };
 }
 
 function validateIrDocument(value: unknown) {

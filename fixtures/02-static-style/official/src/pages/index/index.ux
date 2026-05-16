@@ -1,0 +1,20 @@
+<template>
+  <div class="card">
+    <text>Styled</text>
+  </div>
+</template>
+
+<script>
+export default {}
+</script>
+
+<style>
+  .card {
+    width: 192px;
+    color: #ffffff;
+  }
+
+  text {
+    font-size: 24px;
+  }
+</style>

@@ -52,14 +52,8 @@ fn manifest_full() {
 #[test]
 fn app_module_with_lifecycle() {
     let mut lifecycle = IndexMap::new();
-    lifecycle.insert(
-        "onCreate".into(),
-        "console.log('app created');".into(),
-    );
-    lifecycle.insert(
-        "onDestroy".into(),
-        "console.log('app destroyed');".into(),
-    );
+    lifecycle.insert("onCreate".into(), "console.log('app created');".into());
+    lifecycle.insert("onDestroy".into(), "console.log('app destroyed');".into());
     assert_json_snapshot!("app_module_with_lifecycle", AppModule { lifecycle });
 }
 
@@ -132,10 +126,7 @@ fn style_table_with_multi_selectors_and_kebab_props() {
         }],
     };
 
-    assert_json_snapshot!(
-        "style_table_with_multi_selectors_and_kebab_props",
-        style
-    );
+    assert_json_snapshot!("style_table_with_multi_selectors_and_kebab_props", style);
 }
 
 /// `AssetRef`：路径 / 源路径 / digest 三字段稳定。
@@ -143,7 +134,9 @@ fn style_table_with_multi_selectors_and_kebab_props() {
 fn asset_ref_shape() {
     let asset = AssetRef {
         path: "/common/logo.png".into(),
-        source_path: "/Volumes/EXT0/GitHub/AstroForge/fixtures/01-hello-text/astroforge/src/common/logo.png".into(),
+        source_path:
+            "/Volumes/EXT0/GitHub/AstroForge/fixtures/01-hello-text/astroforge/src/common/logo.png"
+                .into(),
         digest: "0123456789abcdef0123456789abcdef01234567".into(),
     };
     assert_json_snapshot!("asset_ref_shape", asset);

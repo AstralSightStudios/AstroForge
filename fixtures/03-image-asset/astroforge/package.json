@@ -1,0 +1,19 @@
+{
+  "name": "fixture-03-image-asset-astroforge",
+  "version": "0.0.1",
+  "private": true,
+  "description": "fixture 03 的 AstroForge 实现，用于对照测试。",
+  "type": "module",
+  "scripts": {
+    "build": "astroforge build --target vela",
+    "dev": "astroforge dev"
+  },
+  "dependencies": {
+    "@astroforge/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.0.6",
+    "@astroforge/rsbuild-plugin": "workspace:*",
+    "astroforge": "workspace:*"
+  }
+}

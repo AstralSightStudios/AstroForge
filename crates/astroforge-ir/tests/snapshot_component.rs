@@ -144,10 +144,7 @@ fn list_with_key_and_index() {
 /// Fragment 含两个兄弟节点。
 #[test]
 fn fragment_with_siblings() {
-    let node = Node::Fragment(vec![
-        Node::Text("A".into()),
-        Node::Text("B".into()),
-    ]);
+    let node = Node::Fragment(vec![Node::Text("A".into()), Node::Text("B".into())]);
 
     assert_json_snapshot!("fragment_with_siblings", node);
 }

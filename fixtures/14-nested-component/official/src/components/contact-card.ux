@@ -1,0 +1,22 @@
+<template>
+  <div onclick="onCardTap">
+    <text>{{name}}</text>
+  </div>
+</template>
+
+<script>
+export default {
+  props: {
+    name: {
+      type: String,
+      default: ''
+    },
+    onCardTap: {
+      type: Function
+    }
+  }
+}
+</script>
+
+<style>
+</style>

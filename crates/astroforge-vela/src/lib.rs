@@ -14,8 +14,9 @@ pub mod emit;
 pub mod lower;
 
 /// 执行 Vela 后端构建，生成打包器可消费的文件集合。
-pub fn build(_ir: astroforge_ir::page::IrDocument) -> anyhow::Result<VelaBuildOutput> {
-    anyhow::bail!("astroforge-vela: 尚未实现")
+pub fn build(ir: astroforge_ir::page::IrDocument) -> anyhow::Result<VelaBuildOutput> {
+    let lowered = lower::lower_document(&ir)?;
+    emit::emit_build_output(&ir, lowered)
 }
 
 /// 后端单次构建的输出物。`packager` 据此组装 rpk。
@@ -24,9 +25,15 @@ pub struct VelaBuildOutput {
     /// 应用入口模块文本，对应产物 `app.js`。
     pub app_js: String,
 
-    /// 各页面模块文本，键为路由（如 `"pages/index"`），值为对应 JS 文本。
+    /// 各页面模块文本，键为包内相对路径（如 `"pages/index/index.js"`），值为对应 JS 文本。
     pub page_js: indexmap::IndexMap<String, String>,
 
     /// 序列化后的 manifest 文本，对应产物 `manifest.json`。
     pub manifest_json: String,
+
+    /// 包名，供打包器生成默认文件名与诊断信息。
+    pub package: String,
+
+    /// 静态资源清单。packager 负责将其拷贝到包内同名路径。
+    pub assets: Vec<astroforge_ir::page::AssetRef>,
 }

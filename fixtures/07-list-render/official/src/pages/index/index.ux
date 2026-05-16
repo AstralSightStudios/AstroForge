@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div for="{{items}}" for-item="item" for-index="idx" tid="{{item.id}}">
+    <div for="(idx, item) in items">
       <text>{{item.name}}</text>
       <text>{{idx}}</text>
     </div>

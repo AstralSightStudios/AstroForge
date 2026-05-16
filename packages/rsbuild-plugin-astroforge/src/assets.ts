@@ -5,6 +5,7 @@ import type { AssetRef, Component, IrDocument, Node, Page } from "./ir";
 
 export function collectAssets(root: string, document: IrDocument): AssetRef[] {
   const assets = new Map<string, AssetRef>();
+  addAsset(root, document.manifest.icon, assets);
   for (const page of Object.values(document.pages)) {
     collectPageAssets(root, page, assets);
   }
@@ -20,6 +21,7 @@ function collectPageAssets(
   assets: Map<string, AssetRef>,
 ) {
   collectNodeAssets(root, page.template, assets);
+  collectStyleAssets(root, page.style, assets);
 }
 
 function collectComponentAssets(
@@ -28,6 +30,33 @@ function collectComponentAssets(
   assets: Map<string, AssetRef>,
 ) {
   collectNodeAssets(root, component.template, assets);
+  collectStyleAssets(root, component.style, assets);
+}
+
+function collectStyleAssets(
+  root: string,
+  style: Page["style"],
+  assets: Map<string, AssetRef>,
+) {
+  for (const rule of style.rules) {
+    for (const value of Object.values(rule.declarations)) {
+      for (const path of extractCssUrls(value)) {
+        addAsset(root, path, assets);
+      }
+    }
+  }
+}
+
+function extractCssUrls(value: string): string[] {
+  const urls: string[] = [];
+  const pattern = /url\(\s*(?:"([^"]+)"|'([^']+)'|([^'")\s]+))\s*\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(value))) {
+    urls.push(match[1] ?? match[2] ?? match[3]);
+  }
+
+  return urls;
 }
 
 function collectNodeAssets(

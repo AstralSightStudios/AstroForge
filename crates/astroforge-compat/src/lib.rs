@@ -8,8 +8,9 @@
 //! | 2    | `manifest.json`（去时间戳、去 hash 后字段等价） |
 //! | 3    | 资源图（路径、digest）                          |
 //! | 4    | JS AST（规范化后的等价性判定）                  |
-//! | 5    | 运行时调用序列（`__ce__` / `__cc__` 调用图）    |
+//! | 5    | 运行时调用序列（`__ce__` / `__cc__` / `__ci__` / `__cf__` 调用图） |
 //! | 6    | 模拟器 / 真机冒烟测试                           |
+//! | D    | RPK zip 容器结构诊断（entry 顺序、目录项、comment、签名文件） |
 //!
 //! 本 crate 实现 1–5 级；级别 6 由 `astroforge-device` 配合外部夹具承担。
 //!
@@ -17,3 +18,5 @@
 //! - [`ir_diff`]：通用 JSON 文档 diff，是 2 / 4 / 5 级的共享底层。
 
 pub mod ir_diff;
+pub mod normalize;
+pub mod runner;

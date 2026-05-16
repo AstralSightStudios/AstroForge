@@ -84,13 +84,13 @@ pub fn save_ir_pretty(path: &Utf8Path, doc: &IrDocument) -> Result<(), IoError> 
 }
 
 fn write_string(path: &Utf8Path, s: &str) -> Result<(), IoError> {
-    if let Some(parent) = path.parent() {
-        if !parent.as_str().is_empty() {
-            fs::create_dir_all(parent.as_std_path()).map_err(|e| IoError::Write {
-                path: parent.to_string(),
-                source: e,
-            })?;
-        }
+    if let Some(parent) = path.parent()
+        && !parent.as_str().is_empty()
+    {
+        fs::create_dir_all(parent.as_std_path()).map_err(|e| IoError::Write {
+            path: parent.to_string(),
+            source: e,
+        })?;
     }
     fs::write(path.as_std_path(), s).map_err(|e| IoError::Write {
         path: path.to_string(),

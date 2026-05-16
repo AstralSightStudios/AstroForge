@@ -10,6 +10,8 @@
 use astroforge_ir::page::IrDocument;
 
 /// 从磁盘加载并校验 AstroForge IR。
-pub fn load_ir_from_disk(_path: &camino::Utf8Path) -> anyhow::Result<IrDocument> {
-    anyhow::bail!("astroforge-compiler: 尚未实现")
+pub fn load_ir_from_disk(path: &camino::Utf8Path) -> anyhow::Result<IrDocument> {
+    astroforge_ir::io::load_ir_from_path(path)
+        .map_err(anyhow::Error::from)
+        .map_err(|err| err.context(format!("加载 AstroForge IR 失败：{path}")))
 }

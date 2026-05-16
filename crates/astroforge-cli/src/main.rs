@@ -4,6 +4,9 @@
 //! 地了具体行为（IR 检视、Schema 导出），其余子命令保留参数解析骨架，待对
 //! 应 Phase 实装。
 
+use std::fs;
+use std::process::{Command as ProcessCommand, Stdio};
+
 use anyhow::{Context, Result};
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -29,22 +32,54 @@ enum Command {
     },
 
     /// 启动开发服务器，监听源码变化并增量重建。
-    Dev,
+    Dev {
+        #[arg(long, default_value = ".")]
+        root: Utf8PathBuf,
+    },
 
     /// 一次性产出 debug 构建。
     Build {
         #[arg(long, default_value = "vela")]
         target: String,
+
+        /// 项目根目录。
+        #[arg(long, default_value = ".")]
+        root: Utf8PathBuf,
+
+        /// 直接使用已有 IR 文件，跳过 Rsbuild。
+        #[arg(long)]
+        ir: Option<Utf8PathBuf>,
+
+        /// rpk 输出路径。
+        #[arg(long)]
+        out: Option<Utf8PathBuf>,
+
+        /// 跳过 Rsbuild，使用默认 cache 中的 IR。
+        #[arg(long)]
+        skip_rsbuild: bool,
     },
 
     /// 产出 release 构建（含签名、压缩、清理 dev 工具）。
     Release {
         #[arg(long, default_value = "vela")]
         target: String,
+
+        #[arg(long, default_value = ".")]
+        root: Utf8PathBuf,
+
+        #[arg(long)]
+        out: Option<Utf8PathBuf>,
     },
 
     /// 运行兼容性对照测试：分级 diff aiot-toolkit 与 astroforge 产物。
-    TestCompat,
+    TestCompat {
+        #[arg(long, default_value = "fixtures")]
+        fixtures: Utf8PathBuf,
+
+        /// 同时运行 official/aiot-toolkit 侧构建。
+        #[arg(long)]
+        official: bool,
+    },
 
     /// 检视 IR 文件、Schema、或已构建的 rpk 包。
     #[command(subcommand)]
@@ -104,19 +139,30 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
     match cli.command {
-        Command::Init { path } => anyhow::bail!("`astroforge init` 尚未实现，目标：{path}"),
-        Command::Dev => anyhow::bail!("`astroforge dev` 尚未实现"),
-        Command::Build { target } => anyhow::bail!("`astroforge build --target {target}` 尚未实现"),
-        Command::Release { target } => {
-            anyhow::bail!("`astroforge release --target {target}` 尚未实现")
+        Command::Init { path } => run_init(&path),
+        Command::Dev { root } => run_dev(&root),
+        Command::Build {
+            target,
+            root,
+            ir,
+            out,
+            skip_rsbuild,
+        } => run_build(
+            &target,
+            &root,
+            ir.as_ref(),
+            out.as_ref(),
+            skip_rsbuild,
+            "debug",
+        ),
+        Command::Release { target, root, out } => {
+            run_build(&target, &root, None, out.as_ref(), false, "release")
         }
-        Command::TestCompat => anyhow::bail!("`astroforge test-compat` 尚未实现"),
+        Command::TestCompat { fixtures, official } => run_test_compat(&fixtures, official),
         Command::Inspect(cmd) => run_inspect(cmd),
-        Command::Unpack { rpk, out } => {
-            anyhow::bail!("`astroforge unpack {rpk} --out {out}` 尚未实现")
-        }
-        Command::Install { rpk } => anyhow::bail!("`astroforge install {rpk}` 尚未实现"),
-        Command::Log => anyhow::bail!("`astroforge log` 尚未实现"),
+        Command::Unpack { rpk, out } => run_unpack(&rpk, &out),
+        Command::Install { rpk } => run_install(&rpk),
+        Command::Log => run_log(),
     }
 }
 
@@ -133,10 +179,192 @@ fn run_inspect(cmd: InspectCommand) -> Result<()> {
             println!("{s}");
             Ok(())
         }
-        InspectCommand::Rpk { rpk } => {
-            anyhow::bail!("`astroforge inspect rpk {rpk}` 尚未实现（待 Phase 4）")
+        InspectCommand::Rpk { rpk } => inspect_rpk(&rpk),
+    }
+}
+
+fn run_init(path: &camino::Utf8Path) -> Result<()> {
+    fs::create_dir_all(path.join("src/pages/index"))
+        .with_context(|| format!("创建项目目录失败：{path}"))?;
+    write_new_file(&path.join("src/app.tsx"), "export default {};\n")?;
+    write_new_file(
+        &path.join("src/pages/index/index.tsx"),
+        r#"import { Text, View } from "@astroforge/core";
+
+export default function IndexPage() {
+  return (
+    <View>
+      <Text>Hello, Vela!</Text>
+    </View>
+  );
+}
+"#,
+    )?;
+    write_new_file(
+        &path.join("astroforge.config.ts"),
+        r#"export default {
+  manifest: {
+    package: "com.example.astroforge",
+    name: "astroforge-app",
+    versionName: "1.0.0",
+    versionCode: 1,
+    minPlatformVersion: 1200,
+    icon: "/common/logo.png",
+    deviceTypeList: ["watch"],
+    config: { logLevel: "log", designWidth: "device-width" },
+  },
+  plugin: { target: "vela" },
+};
+"#,
+    )?;
+    write_new_file(
+        &path.join("rsbuild.config.ts"),
+        r#"import { defineConfig } from "@rsbuild/core";
+import { pluginAstroForge } from "@astroforge/rsbuild-plugin";
+
+export default defineConfig({
+  plugins: [pluginAstroForge()],
+});
+"#,
+    )?;
+    println!("AstroForge 项目已创建：{path}");
+    Ok(())
+}
+
+fn run_dev(root: &camino::Utf8Path) -> Result<()> {
+    let status = ProcessCommand::new("pnpm")
+        .arg("--dir")
+        .arg(root)
+        .arg("exec")
+        .arg("rsbuild")
+        .arg("dev")
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .with_context(|| format!("启动 Rsbuild dev 失败：{root}"))?;
+    if !status.success() {
+        anyhow::bail!("Rsbuild dev 退出码：{status}");
+    }
+    Ok(())
+}
+
+fn run_build(
+    target: &str,
+    root: &camino::Utf8Path,
+    ir: Option<&Utf8PathBuf>,
+    out: Option<&Utf8PathBuf>,
+    skip_rsbuild: bool,
+    profile: &str,
+) -> Result<()> {
+    if target != "vela" {
+        anyhow::bail!("当前仅支持 --target vela，收到：{target}");
+    }
+
+    if ir.is_none() && !skip_rsbuild {
+        run_rsbuild_build(root)?;
+    }
+
+    let ir_path = ir
+        .cloned()
+        .unwrap_or_else(|| root.join("node_modules/.cache/astroforge/ir-document.json"));
+    let doc = astroforge_ir::io::load_ir_from_path(&ir_path)
+        .with_context(|| format!("加载 IR 失败：{ir_path}"))?;
+    let build = astroforge_vela::build(doc).context("Vela backend 构建失败")?;
+
+    let out_path = out.cloned().unwrap_or_else(|| {
+        root.join("dist")
+            .join(format!("{}.{}.rpk", build.package, profile))
+    });
+    let unpacked = out_path
+        .parent()
+        .unwrap_or_else(|| camino::Utf8Path::new("."))
+        .join("unpacked");
+    let unpacked_files = astroforge_packager::write_unpacked(&build, &unpacked)
+        .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
+    let report = astroforge_packager::pack(&build, &out_path)
+        .with_context(|| format!("打包 rpk 失败：{out_path}"))?;
+
+    println!("构建完成：{}", report.out);
+    println!("  unpacked: {unpacked}");
+    println!("  files:    {}", report.files.len());
+    println!("  unpacked files: {}", unpacked_files.len());
+    Ok(())
+}
+
+fn run_rsbuild_build(root: &camino::Utf8Path) -> Result<()> {
+    let status = ProcessCommand::new("pnpm")
+        .arg("--dir")
+        .arg(root)
+        .arg("exec")
+        .arg("rsbuild")
+        .arg("build")
+        .stdin(Stdio::null())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .with_context(|| format!("启动 Rsbuild build 失败：{root}"))?;
+    if !status.success() {
+        anyhow::bail!("Rsbuild build 退出码：{status}");
+    }
+    Ok(())
+}
+
+fn run_test_compat(fixtures: &camino::Utf8Path, official: bool) -> Result<()> {
+    let report = astroforge_compat::runner::run(&astroforge_compat::runner::CompatOptions {
+        fixtures_root: fixtures.to_owned(),
+        include_official: official,
+    })?;
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    if official && has_compat_diffs(&report) {
+        anyhow::bail!("compat 对照存在差异，详见上方 JSON 报告");
+    }
+    Ok(())
+}
+
+fn has_compat_diffs(report: &astroforge_compat::runner::CompatReport) -> bool {
+    report.fixtures.iter().any(|fixture| {
+        fixture.comparison.as_ref().is_some_and(|comparison| {
+            comparison.files.diff_count > 0
+                || comparison.manifest.diff_count > 0
+                || comparison.runtime_calls.diff_count > 0
+                || comparison.rpk_structure.diff_count > 0
+        })
+    })
+}
+
+fn run_unpack(rpk: &camino::Utf8Path, out: &camino::Utf8Path) -> Result<()> {
+    let files = astroforge_packager::unpack(rpk, out)?;
+    println!("解包完成：{rpk} -> {out}");
+    println!("文件数：{}", files.len());
+    for file in files {
+        println!("  - {file}");
+    }
+    Ok(())
+}
+
+fn run_install(rpk: &camino::Utf8Path) -> Result<()> {
+    match astroforge_device::install(rpk)? {
+        astroforge_device::DeviceAction::Executed { command } => {
+            println!("安装命令已执行：{command}");
+        }
+        astroforge_device::DeviceAction::Skipped { reason } => {
+            println!("{reason}");
         }
     }
+    Ok(())
+}
+
+fn run_log() -> Result<()> {
+    match astroforge_device::log()? {
+        astroforge_device::DeviceAction::Executed { command } => {
+            println!("日志命令已结束：{command}");
+        }
+        astroforge_device::DeviceAction::Skipped { reason } => {
+            println!("{reason}");
+        }
+    }
+    Ok(())
 }
 
 fn inspect_ir(path: &camino::Utf8Path, pretty: bool) -> Result<()> {
@@ -161,10 +389,7 @@ fn inspect_ir(path: &camino::Utf8Path, pretty: bool) -> Result<()> {
     println!("  pages:       {}", doc.pages.len());
     println!("  components:  {}", doc.components.len());
     println!("  assets:      {}", doc.assets.len());
-    println!(
-        "  app lifecycle: {} 个 hook",
-        doc.app.lifecycle.len(),
-    );
+    println!("  app lifecycle: {} 个 hook", doc.app.lifecycle.len(),);
 
     if pretty {
         println!("\n完整文档：");
@@ -173,5 +398,45 @@ fn inspect_ir(path: &camino::Utf8Path, pretty: bool) -> Result<()> {
             serde_json::to_string_pretty(&doc).expect("IrDocument 序列化"),
         );
     }
+    Ok(())
+}
+
+fn inspect_rpk(path: &camino::Utf8Path) -> Result<()> {
+    let info = astroforge_packager::inspect(path)?;
+    println!("RPK 文件: {}", info.path);
+    if let Some(manifest) = &info.manifest {
+        println!(
+            "  package: {}",
+            manifest
+                .get("package")
+                .and_then(|v| v.as_str())
+                .unwrap_or("<unknown>")
+        );
+        println!(
+            "  entry:   {}",
+            manifest
+                .pointer("/router/entry")
+                .and_then(|v| v.as_str())
+                .unwrap_or("<unknown>")
+        );
+    }
+    println!("文件清单 ({}):", info.files.len());
+    for file in info.files {
+        println!(
+            "  - {} ({} bytes, compressed {})",
+            file.path, file.size, file.compressed_size
+        );
+    }
+    Ok(())
+}
+
+fn write_new_file(path: &camino::Utf8Path, content: &str) -> Result<()> {
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("创建目录失败：{parent}"))?;
+    }
+    fs::write(path, content).with_context(|| format!("写入文件失败：{path}"))?;
     Ok(())
 }

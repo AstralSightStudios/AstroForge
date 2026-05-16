@@ -71,7 +71,10 @@ fn array_length_difference_reports_length_and_boundary_entries() {
 
     // 期望：root 长度差 + /1 值差 + /3 Extra。
     let paths = collect_paths(&diffs);
-    assert!(paths.iter().any(|p| p.is_empty()), "应记录根路径长度差: {paths:?}");
+    assert!(
+        paths.iter().any(|p| p.is_empty()),
+        "应记录根路径长度差: {paths:?}"
+    );
     assert!(paths.contains(&"/1".to_string()));
     assert!(paths.contains(&"/3".to_string()));
 
@@ -152,8 +155,7 @@ fn end_to_end_ir_document_diff_locates_template_change() {
     let diffs = diff(&left, &right).unwrap();
     assert_eq!(diffs.len(), 1, "应仅有文本节点 value 一处变更：{diffs:#?}");
     assert_eq!(
-        diffs[0].path,
-        "/pages/pages~1index/template/0/value/children/0/value",
+        diffs[0].path, "/pages/pages~1index/template/0/value/children/0/value",
         "diff 路径应精确定位到文本变更点",
     );
     assert!(matches!(diffs[0].kind, DiffKind::Value { .. }));

@@ -44,6 +44,5 @@ fn schema_for<T: JsonSchema>() -> RootSchema {
 }
 
 fn schema_to_pretty(schema: &RootSchema) -> String {
-    serde_json::to_string_pretty(schema)
-        .expect("RootSchema 序列化不应失败：仅含 JSON 兼容类型")
+    serde_json::to_string_pretty(schema).expect("RootSchema 序列化不应失败：仅含 JSON 兼容类型")
 }

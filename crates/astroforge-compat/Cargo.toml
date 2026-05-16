@@ -17,3 +17,4 @@ indexmap = { workspace = true }
 walkdir = { workspace = true }
 camino = { workspace = true }
 tracing = { workspace = true }
+zip = { workspace = true }
