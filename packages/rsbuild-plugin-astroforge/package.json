@@ -1,6 +1,6 @@
 {
   "name": "@astralsight/astroforge-rsbuild-plugin",
-  "version": "0.0.1",
+  "version": "0.0.5",
   "description": "AstroForge Plugin for RsBuild",
   "license": "MIT",
   "repository": {
