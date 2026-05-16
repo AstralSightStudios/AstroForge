@@ -16,13 +16,18 @@
 - 提取页面函数内的事件处理方法，写入 Page IR 的 `script.methods`。
 - 将 `useState` 的静态初值写入 `script.private_data`，并把简单 setter 调用下
   沉为对页面实例状态的直接赋值。
+- 将页面函数内的 `useEffect` 静态展开为生命周期：省略依赖或空依赖数组映射
+  到 `onReady`，cleanup 函数映射到 `onDestroy`。
 - 将 JSX 三元表达式和 `&&` 表达式下沉为 Component IR 的 `conditional` 节点。
 - 将 `array.map((item, index) => <Node />)` 下沉为 Component IR 的 `list`
   节点，并把 JSX `key` 记录到 `List.key`。
 - 将页面模块导出的 `lifecycle` 对象写入 Page IR 的 `script.lifecycle`。
 - 将 `src/app.tsx` 的 default export 对象方法写入 IR 根节点的 `app.lifecycle`。
 - 提取同一页面模块内的 PascalCase 本地组件，并在 Page IR 中记录组件导入关系。
-- 提取页面模块导出的静态 `style` / `styles` 字符串，转换为 Style IR。
+- 从组件首参的 TypeScript 注解推导 `script.props`，支持 type literal、
+  interface、type alias 与解构默认值。
+- 提取相对 CSS import 与页面模块导出的静态 `style` / `styles` 字符串，转换
+  为 Style IR。
 - 收集 manifest icon、静态 `Image.src`、静态 CSS `url(...)` 指向的项目内资
   源，并写入 IR 根节点的 `assets`。
 - 按 `@astroforge/core/platform` 的能力目录校验目标平台支持的组件与
@@ -82,13 +87,16 @@ Phase 2 的 TSX 提取器以稳定 IR 为目标，当前只接受可直接映射
 - `useState` 初值必须是静态 JSON 字面量；
 - `setState` updater 当前支持值表达式或单表达式箭头函数，例如
   `setCount(count + 1)` 与 `setCount((prev) => prev + 1)`；
+- `useEffect` 仅支持省略依赖或空依赖数组；非空依赖数组暂不支持；
 - 条件渲染的 guard 当前只支持标识符或成员访问路径；
 - 列表渲染当前只支持直接的 `.map(...)` 调用，item / index 参数必须是标识符；
 - 页面生命周期必须通过 `export const lifecycle = { ... }` 声明；
 - 应用生命周期必须通过 `src/app.tsx` 的 default export 对象方法声明；
-- 页面静态样式必须通过 `export const style = "..."` 或
+- 页面静态样式可通过相对 CSS import、`export const style = "..."` 或
   `export const styles = "..."` 声明，不执行运行时代码；
+- 混合内联 style 对象仅支持静态字面量值与标识符 / 成员访问绑定；
 - 本地组件必须使用 PascalCase 顶层函数或函数变量声明；
+- props 推导只读取组件首参的静态 TypeScript 注解，不执行类型检查器；
 - 组件命名空间（`<Foo.Bar />`）暂不支持。
 
 这些限制用于保证前端阶段输出的 IR 可预测，后续扩展应以 fixture 和 schema

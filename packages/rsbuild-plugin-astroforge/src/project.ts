@@ -70,6 +70,7 @@ export function compileAstroForgeProject(
     const module = extractPageModuleFromTsx(source, {
       route: page.route,
       filename: page.file,
+      loadStyle: loadStyleImport,
     });
     document.pages[page.route] = module.page;
     for (const [name, component] of Object.entries(module.components)) {
@@ -183,6 +184,7 @@ function loadCrossFileComponents(
     const result = extractComponentFromTsx(source, {
       filename: resolved,
       exportName: ref.exportName,
+      loadStyle: loadStyleImport,
     });
     // 用 import 时声明的 kebab 标签作为表内主键，确保 JSX 模板中 `<Card />`
     // 能命中——本地名与默认导出标识符可能不一致（如 `import Foo from './Card'`）。
@@ -191,6 +193,19 @@ function loadCrossFileComponents(
       queue.push({ parent: resolved, ref: nested });
     }
   }
+}
+
+function loadStyleImport(
+  specifier: string,
+  importer?: string,
+): string | undefined {
+  if (!importer) return undefined;
+  if (!specifier.startsWith("./") && !specifier.startsWith("../")) {
+    return undefined;
+  }
+  const path = resolve(dirname(importer), specifier);
+  if (!existsSync(path)) return undefined;
+  return readFileSync(path, "utf8");
 }
 
 function resolveComponentImport(

@@ -631,6 +631,56 @@ export function Badge() {
       badge: "badge",
     });
   });
+
+  it("loads relative CSS imports into page style", () => {
+    const tmpRoot = mkdtempSync(join(tmpdir(), "astroforge-css-import-"));
+    const srcRoot = join(tmpRoot, "src");
+    mkdirSync(join(srcRoot, "pages/index"), { recursive: true });
+    mkdirSync(join(srcRoot, "common"), { recursive: true });
+
+    writeFileSync(
+      join(srcRoot, "pages/index/index.tsx"),
+      `import "./index.css";
+import { View } from "@astroforge/core";
+
+export default function IndexPage() {
+  return <View className="card" />;
+}
+`,
+    );
+    writeFileSync(
+      join(srcRoot, "pages/index/index.css"),
+      `.card { color: red; padding: 8px; }`,
+    );
+    writeFileSync(
+      join(tmpRoot, "astroforge.config.ts"),
+      `export default {
+  manifest: {
+    package: "com.example.css",
+    name: "css",
+    versionName: "0.0.0",
+    versionCode: 1,
+    minPlatformVersion: 1200,
+    icon: "/common/logo.png",
+    deviceTypeList: ["watch"],
+  },
+};
+`,
+    );
+    writeFileSync(join(srcRoot, "common/logo.png"), Buffer.alloc(0));
+
+    const { document } = compileAstroForgeProject({
+      root: tmpRoot,
+      outFile: join(tmpRoot, "ir-document.json"),
+    });
+
+    expect(document.pages["pages/index"].style.rules).toEqual([
+      {
+        selectors: [{ kind: "class", name: "card" }],
+        declarations: { color: "red", padding: "8px" },
+      },
+    ]);
+  });
 });
 
 function compileFixture(root: string) {

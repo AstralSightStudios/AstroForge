@@ -7,8 +7,10 @@ import type {
   JsonValue,
   Node,
   Page,
+  Prop,
   Script,
   AppModule,
+  StyleSlot,
 } from "./ir";
 import { createEmptyScript, createEmptyStyleTable } from "./ir";
 import { parseStyleTable } from "./style";
@@ -59,6 +61,7 @@ const BUILTIN_COMPONENTS = new Map<string, string>([
 export interface ExtractPageOptions {
   route: string;
   filename?: string;
+  loadStyle?: StyleImportLoader;
 }
 
 interface PageFunction {
@@ -149,7 +152,12 @@ export function extractPageModuleFromTsx(
     imports,
     template,
     script,
-    style: extractStyleTable(source, ast.program.body, options.filename),
+    style: extractStyleTable(
+      source,
+      ast.program.body,
+      options.filename,
+      options.loadStyle,
+    ),
   };
 
   return { page, components, componentImports };
@@ -161,7 +169,13 @@ export interface ExtractComponentOptions {
   /// `export const Foo = () => ...` / `export { Foo }`。缺省时按默认导出
   /// 处理。
   exportName?: string;
+  loadStyle?: StyleImportLoader;
 }
+
+export type StyleImportLoader = (
+  specifier: string,
+  importer?: string,
+) => string | undefined;
 
 export interface ExtractComponentResult {
   component: Component;
@@ -205,8 +219,20 @@ export function extractComponentFromTsx(
   const component: Component = {
     name: kebabCase(located.localName),
     template,
-    script: createEmptyScript(),
-    style: extractStyleTable(source, ast.program.body, options.filename),
+    script: {
+      ...createEmptyScript(),
+      props: extractComponentProps(
+        located.node,
+        ast.program.body,
+        options.filename,
+      ),
+    },
+    style: extractStyleTable(
+      source,
+      ast.program.body,
+      options.filename,
+      options.loadStyle,
+    ),
   };
 
   return { component, componentImports };
@@ -214,6 +240,7 @@ export function extractComponentFromTsx(
 
 interface LocatedComponentFunction {
   localName: string;
+  node: any;
   renderExpression: any;
 }
 
@@ -226,6 +253,7 @@ function locateComponentFunction(
     const page = findDefaultPageFunction(body, filename);
     return {
       localName: page.node.id?.name ?? defaultExportName(body) ?? "Component",
+      node: page.node,
       renderExpression: page.renderExpression,
     };
   }
@@ -242,6 +270,7 @@ function locateComponentFunction(
     ) {
       return {
         localName: exportName,
+        node: statement.declaration,
         renderExpression: renderExpressionFromFunction(
           statement.declaration,
           filename,
@@ -258,6 +287,7 @@ function locateComponentFunction(
         ) {
           return {
             localName: exportName,
+            node: unwrapExpression(declarator.init),
             renderExpression: renderExpressionFromFunction(
               unwrapExpression(declarator.init),
               filename,
@@ -279,6 +309,7 @@ function locateComponentFunction(
       if (local && isFunctionLike(local)) {
         return {
           localName: exportName,
+          node: local,
           renderExpression: renderExpressionFromFunction(local, filename),
         };
       }
@@ -438,7 +469,10 @@ function extractLocalComponents(
         bindings,
         filename,
       ),
-      script: createEmptyScript(),
+      script: {
+        ...createEmptyScript(),
+        props: extractComponentProps(fn, body, filename),
+      },
       style: createEmptyStyleTable(),
     };
   }
@@ -466,6 +500,176 @@ function componentCandidate(
   }
 
   return undefined;
+}
+
+function extractComponentProps(
+  fn: any,
+  moduleBody: any[],
+  filename?: string,
+): Record<string, Prop> {
+  const first = fn.params?.[0];
+  if (!first) return {};
+  const node = unwrapExpression(first);
+  const typeNode = propTypeNode(node);
+  const props = typeNode
+    ? propsFromTypeNode(typeNode, moduleBody, filename)
+    : {};
+
+  if (node.type === "ObjectPattern") {
+    for (const property of node.properties) {
+      if (property.type !== "ObjectProperty") continue;
+      if (property.computed) continue;
+      const key = objectPropertyKey(property.key, filename);
+      const value = unwrapExpression(property.value);
+      if (value.type === "AssignmentPattern") {
+        const fallback = staticAttrLiteral(value.right);
+        if (fallback !== undefined) {
+          props[key] = {
+            type: props[key]?.type ?? propTypeFromDefault(fallback),
+            default: fallback,
+          };
+        }
+      } else if (!props[key]) {
+        props[key] = { type: "Object" };
+      }
+    }
+  }
+
+  return props;
+}
+
+function propTypeNode(param: any): any | undefined {
+  if (param.type === "Identifier" || param.type === "ObjectPattern") {
+    return param.typeAnnotation?.typeAnnotation;
+  }
+  if (param.type === "AssignmentPattern") {
+    return propTypeNode(unwrapExpression(param.left));
+  }
+  return undefined;
+}
+
+function propsFromTypeNode(
+  typeNode: any,
+  moduleBody: any[],
+  filename?: string,
+): Record<string, Prop> {
+  const node = unwrapExpression(typeNode);
+  if (node.type === "TSTypeLiteral") {
+    return propsFromTypeLiteral(node, moduleBody, filename);
+  }
+  if (node.type === "TSTypeReference" && node.typeName.type === "Identifier") {
+    const resolved = findTypeBinding(moduleBody, node.typeName.name);
+    if (!resolved) return {};
+    return propsFromTypeNode(resolved, moduleBody, filename);
+  }
+  if (node.type === "TSInterfaceDeclaration") {
+    return propsFromTypeLiteral(node.body, moduleBody, filename);
+  }
+  if (node.type === "TSTypeAliasDeclaration") {
+    return propsFromTypeNode(node.typeAnnotation, moduleBody, filename);
+  }
+  return {};
+}
+
+function propsFromTypeLiteral(
+  node: any,
+  moduleBody: any[],
+  filename?: string,
+): Record<string, Prop> {
+  const out: Record<string, Prop> = {};
+  for (const member of node.members ?? node.body ?? []) {
+    if (member.type !== "TSPropertySignature") continue;
+    const key = objectPropertyKey(member.key, filename);
+    const valueType = member.typeAnnotation?.typeAnnotation;
+    out[key] = {
+      type: valueType
+        ? propRuntimeType(valueType, moduleBody, filename)
+        : "Object",
+    };
+  }
+  return out;
+}
+
+function findTypeBinding(moduleBody: any[], name: string): any | undefined {
+  for (const statement of moduleBody) {
+    const node =
+      statement.type === "ExportNamedDeclaration" && statement.declaration
+        ? statement.declaration
+        : statement;
+    if (
+      (node.type === "TSInterfaceDeclaration" ||
+        node.type === "TSTypeAliasDeclaration") &&
+      node.id?.name === name
+    ) {
+      return node;
+    }
+  }
+  return undefined;
+}
+
+function propRuntimeType(
+  typeNode: any,
+  moduleBody: any[],
+  filename?: string,
+): string {
+  const node = unwrapExpression(typeNode);
+  switch (node.type) {
+    case "TSStringKeyword":
+      return "String";
+    case "TSNumberKeyword":
+      return "Number";
+    case "TSBooleanKeyword":
+      return "Boolean";
+    case "TSArrayType":
+    case "TSTupleType":
+      return "Array";
+    case "TSFunctionType":
+      return "Function";
+    case "TSTypeLiteral":
+      return "Object";
+    case "TSTypeReference": {
+      if (node.typeName.type !== "Identifier") return "Object";
+      const name = node.typeName.name;
+      if (["Array", "ReadonlyArray"].includes(name)) return "Array";
+      if (["Function"].includes(name)) return "Function";
+      const resolved = findTypeBinding(moduleBody, name);
+      if (!resolved) return "Object";
+      return propRuntimeType(resolved, moduleBody, filename);
+    }
+    case "TSInterfaceDeclaration":
+      return "Object";
+    case "TSTypeAliasDeclaration":
+      return propRuntimeType(node.typeAnnotation, moduleBody, filename);
+    case "TSUnionType":
+      return propRuntimeTypeFromUnion(node.types, moduleBody, filename);
+    default:
+      return "Object";
+  }
+}
+
+function propRuntimeTypeFromUnion(
+  types: any[],
+  moduleBody: any[],
+  filename?: string,
+): string {
+  const concrete = types.filter(
+    (item) =>
+      !["TSNullKeyword", "TSUndefinedKeyword", "TSVoidKeyword"].includes(
+        unwrapExpression(item).type,
+      ),
+  );
+  const mapped = new Set(
+    concrete.map((item) => propRuntimeType(item, moduleBody, filename)),
+  );
+  return mapped.size === 1 ? [...mapped][0] : "Object";
+}
+
+function propTypeFromDefault(value: JsonValue): string {
+  if (typeof value === "string") return "String";
+  if (typeof value === "number") return "Number";
+  if (typeof value === "boolean") return "Boolean";
+  if (Array.isArray(value)) return "Array";
+  return "Object";
 }
 
 function importsFromTemplate(
@@ -505,7 +709,28 @@ function collectTemplateImports(
   }
 }
 
-function extractStyleTable(source: string, body: any[], filename?: string) {
+function extractStyleTable(
+  source: string,
+  body: any[],
+  filename?: string,
+  loadStyle?: StyleImportLoader,
+) {
+  const chunks: string[] = [];
+  for (const statement of body) {
+    if (statement.type !== "ImportDeclaration") continue;
+    const specifier = statement.source.value;
+    if (typeof specifier !== "string" || !specifier.endsWith(".css")) {
+      continue;
+    }
+    const css = loadStyle?.(specifier, filename);
+    if (css === undefined) {
+      throw new Error(
+        `${filename ?? "TSX"}: CSS import ${specifier} 无法解析`,
+      );
+    }
+    chunks.push(css);
+  }
+
   for (const statement of body) {
     if (
       statement.type !== "ExportNamedDeclaration" ||
@@ -525,18 +750,21 @@ function extractStyleTable(source: string, body: any[], filename?: string) {
 
       const init = unwrapExpression(declarator.init);
       if (init.type === "StringLiteral") {
-        return parseStyleTable(init.value);
+        chunks.push(init.value);
+        continue;
       }
       if (init.type === "TemplateLiteral" && init.expressions.length === 0) {
-        return parseStyleTable(
-          init.quasis.map((quasi: any) => quasi.value.cooked).join(""),
-        );
+        chunks.push(init.quasis.map((quasi: any) => quasi.value.cooked).join(""));
+        continue;
       }
       throw new Error(`${filename ?? "TSX"}: styles 必须是静态字符串`);
     }
   }
 
-  return createEmptyStyleTable();
+  if (chunks.length === 0) {
+    return createEmptyStyleTable();
+  }
+  return parseStyleTable(chunks.join("\n"));
 }
 
 function findDefaultPageFunction(body: any[], filename?: string): PageFunction {
@@ -594,6 +822,7 @@ function extractScript(
   }
 
   collectPageLifecycle(script, context, moduleBody);
+  collectUseEffectCalls(script, context, body.body);
 
   return script;
 }
@@ -677,6 +906,89 @@ function collectMethod(script: Script, context: ScriptContext, statement: any) {
   }
 }
 
+function collectUseEffectCalls(
+  script: Script,
+  context: ScriptContext,
+  statements: any[],
+) {
+  for (const statement of statements) {
+    if (
+      statement.type !== "ExpressionStatement" ||
+      !isUseEffectCall(statement.expression)
+    ) {
+      continue;
+    }
+
+    const call = unwrapExpression(statement.expression);
+    assertSupportedEffectDeps(call, context.filename);
+    const effect = effectBodies(context, call.arguments[0]);
+    if (effect.body) {
+      appendLifecycleBody(script.lifecycle, "onReady", effect.body);
+    }
+    if (effect.cleanup) {
+      appendLifecycleBody(script.lifecycle, "onDestroy", effect.cleanup);
+    }
+  }
+}
+
+function isUseEffectCall(node: any): boolean {
+  const expression = unwrapExpression(node);
+  return (
+    expression.type === "CallExpression" &&
+    expression.callee.type === "Identifier" &&
+    expression.callee.name === "useEffect"
+  );
+}
+
+function assertSupportedEffectDeps(call: any, filename?: string) {
+  const deps = call.arguments[1];
+  if (!deps) return;
+  const node = unwrapExpression(deps);
+  if (node.type === "ArrayExpression" && node.elements.length === 0) {
+    return;
+  }
+  throw new Error(
+    `${filename ?? "TSX"}: useEffect 静态展开仅支持省略依赖或空依赖数组`,
+  );
+}
+
+function effectBodies(
+  context: ScriptContext,
+  callback: any,
+): { body?: string; cleanup?: string } {
+  const fn = unwrapExpression(callback);
+  if (!isFunctionLike(fn)) {
+    throw new Error(`${context.filename ?? "TSX"}: useEffect 参数必须是函数`);
+  }
+
+  const body = unwrapExpression(fn.body);
+  if (body.type !== "BlockStatement") {
+    return { body: `${lowerExpression(context, body)};` };
+  }
+
+  const statements: string[] = [];
+  let cleanup: string | undefined;
+  for (const statement of body.body) {
+    if (statement.type === "ReturnStatement") {
+      if (!statement.argument) continue;
+      const returned = unwrapExpression(statement.argument);
+      if (!isFunctionLike(returned)) {
+        throw new Error(
+          `${context.filename ?? "TSX"}: useEffect cleanup 必须返回函数`,
+        );
+      }
+      cleanup = lowerFunctionBodySource(context, returned.body);
+      continue;
+    }
+    const lowered = lowerStatement(context, statement);
+    if (lowered) statements.push(lowered);
+  }
+  return {
+    body: statements.join("\n"),
+    cleanup,
+  };
+}
+
 function collectPageLifecycle(
   script: Script,
   context: ScriptContext,
@@ -730,6 +1042,35 @@ function collectLifecycleObject(
         ? lowerFunctionLike(context, fn, key)
         : lowerFunctionBodySource(context, fn.body);
   }
+}
+
+function appendLifecycleBody(
+  lifecycle: Record<string, string>,
+  name: string,
+  body: string,
+) {
+  const existing = lifecycle[name];
+  const bodies = [existing ? functionBodyFromSource(existing) : "", body]
+    .map((item) => item.trim())
+    .filter(Boolean);
+  lifecycle[name] = `function ${name}() {\n${indentJsBody(bodies.join("\n"))}\n}`;
+}
+
+function functionBodyFromSource(source: string): string {
+  const match = source.match(/^function\s+[A-Za-z_$][\w$]*\([^)]*\)\s*\{\n?([\s\S]*)\n?\}$/);
+  if (!match) return source;
+  return match[1]
+    .split("\n")
+    .map((line) => (line.startsWith("  ") ? line.slice(2) : line))
+    .join("\n")
+    .trim();
+}
+
+function indentJsBody(source: string): string {
+  return source
+    .split("\n")
+    .map((line) => (line.trim() ? `  ${line}` : ""))
+    .join("\n");
 }
 
 function lifecycleFunctionNode(property: any, filename?: string): any {
@@ -1067,7 +1408,9 @@ function elementFromJsx(
       continue;
     }
 
-    attrs[normalizeAttributeName(attrName, isComponent)] = attrFromValue(
+    const normalizedName = normalizeAttributeName(attrName, isComponent);
+    attrs[normalizedName] = attrFromValue(
+      normalizedName,
       attr.value,
       filename,
     );
@@ -1323,7 +1666,7 @@ function keyBindingFromJsx(
   return bindingFromAttribute(keyAttr.value, false, filename);
 }
 
-function attrFromValue(value: any, filename?: string): Attr {
+function attrFromValue(name: string, value: any, filename?: string): Attr {
   if (!value) {
     return { kind: "static", value: true };
   }
@@ -1353,10 +1696,48 @@ function attrFromValue(value: any, filename?: string): Attr {
     return { kind: "static", value: staticObject };
   }
 
+  if (name === "style") {
+    const styleObject = styleObjectAttr(expression, filename);
+    if (styleObject) {
+      return { kind: "style_object", value: styleObject };
+    }
+  }
+
   return {
     kind: "dynamic",
     value: bindingFromExpression(expression, false, filename),
   };
+}
+
+function styleObjectAttr(
+  expression: any,
+  filename?: string,
+): StyleSlot[] | undefined {
+  const node = unwrapExpression(expression);
+  if (node.type !== "ObjectExpression") return undefined;
+
+  const slots: StyleSlot[] = [];
+  for (const property of node.properties) {
+    if (property.type !== "ObjectProperty" || property.computed) {
+      throw new Error(
+        `${filename ?? "TSX"}: style 对象暂不支持展开、方法或计算键`,
+      );
+    }
+    const key = objectPropertyKey(property.key, filename);
+    const value = staticAttrLiteral(property.value);
+    if (value !== undefined) {
+      slots.push({ name: key, value: { kind: "static", value } });
+      continue;
+    }
+    slots.push({
+      name: key,
+      value: {
+        kind: "dynamic",
+        value: bindingFromExpression(property.value, false, filename),
+      },
+    });
+  }
+  return slots;
 }
 
 /// 尝试把表达式整体解析为静态 JSON 字面量。

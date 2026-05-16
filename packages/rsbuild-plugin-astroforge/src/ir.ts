@@ -124,6 +124,16 @@ export interface Element {
 
 export type Attr =
   | { kind: "static"; value: JsonValue }
+  | { kind: "dynamic"; value: Binding }
+  | { kind: "style_object"; value: StyleSlot[] };
+
+export interface StyleSlot {
+  name: string;
+  value: StyleSlotValue;
+}
+
+export type StyleSlotValue =
+  | { kind: "static"; value: JsonValue }
   | { kind: "dynamic"; value: Binding };
 
 export interface Binding {

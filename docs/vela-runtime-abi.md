@@ -272,7 +272,7 @@ selectorDescriptor = [ [ [ <selectorTypeIndex>, <selectorName> ], ... ] ]
 | `classList` | `string[]`                                                     | 仅静态 class，动态 class 走函数闭包 |
 | `events`    | `{ [eventName]: (evt) => any }`                                | 事件名去除 `on` 前缀（`click`、`cardtap`） |
 | `value`     | `string \| (() => string)`                                     | 文本内容，函数形式表示动态绑定 |
-| `style`     | `() => $translateStyle$(...)` 或静态对象                       | 内联样式 |
+| `style`     | `() => $translateStyle$(...)`、`() => ({ ... })` 或静态对象    | 内联样式 |
 | `attrs`     | 元素相关属性集合                                                | 标签特定（`src`、`name`、`color` 等） |
 | `modifiers` | `{ [attr]: { [decorator]: true } }`                            | 源自 UX 模板的 `attr.mod` 装饰器语法 |
 

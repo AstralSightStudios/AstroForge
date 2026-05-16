@@ -47,6 +47,20 @@ Rsbuild 插件向 Rust 后端传递的契约即 [`astroforge_ir::page::IrDocumen
 // Node::Text
 { "kind": "text", "value": "Hello, Vela!" }
 
+// Attr::StyleObject
+{
+  "kind": "style_object",
+  "value": [
+    {
+      "name": "color",
+      "value": {
+        "kind": "dynamic",
+        "value": { "path": "theme.color", "is_callable": false }
+      }
+    }
+  ]
+}
+
 // OptValue::ClassList
 { "kind": "class_list", "value": ["title", "active"] }
 ```

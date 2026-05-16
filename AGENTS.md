@@ -228,22 +228,23 @@ fixtures/<NN>-<name>/
 
 可作为下一轮工作的起点，避免重新走弯路：
 
-- 未支持：`useEffect` 静态展开（hook 已声明但未实现 TSX 提取，触发会报"未
-  实现"）。需要先决定 lifecycle 映射规则（`onInit`？`onReady`？）再实装。
-- 未支持：`<View style={dynamicObj}>` 这种动态对象样式——目前只允许动态值
-  是路径绑定（`style={someVar}`）。要支持混合静态/动态对象，需要在 IR 加
-  一种新的 Attr 变体（如 `Composed { template: Vec<StyleSlot> }`）。
-- 未支持：CSS 文件 `import './foo.css'`。当前只支持 `export const styles = "..."`
-  字符串字面量与同文件模板字面量。
-- 未支持：组件级 props 类型推导。`Component IR.script.props` 字段始终为
-  空——Vela runtime 接受组件 props 但 IR 没记录类型，类型错误只能靠
-  TypeScript 编译期捕获。
 - 未支持：分包 (`subpackages`)、卡片 (`liteCard`)、protobuf 资产、jsc 字
   节码——aiotpack 都有专门模块，AstroForge 现仅透传 `manifest.subpackages`
   字段而无运行时支持。
 - inspect rpk 显示的公钥指纹是从 SPKI DER 截前 8 字节 SHA-256 取的非标
   准格式；要与 aiot 的 X.509 fingerprint 互认，需要走 DER 编码的标准
   SHA-256 fingerprint。
+
+近期已补齐：
+- `useEffect` 静态展开：省略依赖或空依赖数组映射到 `onReady`；cleanup 函
+  数映射到 `onDestroy`。非空依赖数组仍会报错，因为当前 IR 没有运行期依赖
+  追踪语义。
+- 混合内联 style 对象：`style={{ color: theme.color, fontSize: 16 }}` 下沉
+  为 `Attr::StyleObject`，Vela 后端在模板闭包内组装对象。
+- CSS 文件 `import './foo.css'`：相对 CSS import 会按导入文件路径读取，并
+  与 `export const styles = "..."` 同步进入页面 / 组件样式表。
+- 组件级 props 类型推导：支持函数首参上的 type literal、interface、type
+  alias，以及解构默认值；生成 `Component IR.script.props`。
 
 不要因为这一节存在就主动开始做。**等用户明确点名**。
 

@@ -55,7 +55,7 @@
   },
   "definitions": {
     "Manifest": {
-      "description": "应用清单。字段命名一比一对齐 Vela 厂商格式，详见 `docs/vela-runtime-abi.md` §8。",
+      "description": "应用清单。\n\n字段命名对齐 Vela 厂商 manifest.json 的 camelCase 键，详见 `docs/vela-runtime-abi.md` §8。\n\nIR 中存在两种表示：\n\n- 强类型字段（`package` / `router` / `device_type_list` 等）：供 IR 消费方（Vela 后端、packager、test-compat runner）做派生计算与校验。 - `source`：源 manifest 的原始 JSON 对象，按用户书写顺序保留所有字段， 包括 IR 未显式建模的扩展字段（如 `subpackages`、`widgets`、 `router.params`、`config.*` 厂商扩展）。\n\n后端在生成 Vela `manifest.json` 时，**优先**以 `source` 作为基础对象按 源序输出，并仅追加 `minAPILevel`、`packageInfo` 等流水线注入项；只有当 `source` 缺失（如来自旧版前端或单测构造）时才退回按强类型字段重建。",
       "type": "object",
       "required": [
         "device_type_list",
@@ -124,6 +124,9 @@
         },
         "router": {
           "$ref": "#/definitions/Router"
+        },
+        "source": {
+          "description": "源 manifest 的 camelCase 原始 JSON 对象。\n\n当前端能提供时，必须是一个 JSON object 且至少包含 `package`、`name`、 `router.entry` 与 `router.pages` 这些 Vela 必需字段；其余字段按用户 原顺序保留。后端 / packager 不应原地修改本字段。"
         }
       }
     },
@@ -437,6 +440,28 @@
               "$ref": "#/definitions/Binding"
             }
           }
+        },
+        {
+          "description": "内联 style 对象的混合形态。\n\nJSX `style={{ color: theme.color, fontSize: 16 }}` 不能表示为单个路径 绑定，也不能提前静态化。前端将每个属性值拆成静态值或绑定路径，Vela 后端再在模板闭包里组装对象。",
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "style_object"
+              ]
+            },
+            "value": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/StyleSlot"
+              }
+            }
+          }
         }
       ]
     },
@@ -457,6 +482,59 @@
           "type": "boolean"
         }
       }
+    },
+    "StyleSlot": {
+      "type": "object",
+      "required": [
+        "name",
+        "value"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/definitions/StyleSlotValue"
+        }
+      }
+    },
+    "StyleSlotValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "static"
+              ]
+            },
+            "value": true
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "kind",
+            "value"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "dynamic"
+              ]
+            },
+            "value": {
+              "$ref": "#/definitions/Binding"
+            }
+          }
+        }
+      ]
     },
     "Conditional": {
       "description": "`if` / `elif` / `else` 条件链。",

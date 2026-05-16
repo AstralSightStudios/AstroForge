@@ -74,6 +74,26 @@ pub enum Attr {
 
     /// 来自 TSX 作用域的绑定，下沉为闭包以支持响应式更新。
     Dynamic(Binding),
+
+    /// 内联 style 对象的混合形态。
+    ///
+    /// JSX `style={{ color: theme.color, fontSize: 16 }}` 不能表示为单个路径
+    /// 绑定，也不能提前静态化。前端将每个属性值拆成静态值或绑定路径，Vela
+    /// 后端再在模板闭包里组装对象。
+    StyleObject(Vec<StyleSlot>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct StyleSlot {
+    pub name: String,
+    pub value: StyleSlotValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+pub enum StyleSlotValue {
+    Static(serde_json::Value),
+    Dynamic(Binding),
 }
 
 /// 对视图模型上某个值的引用。

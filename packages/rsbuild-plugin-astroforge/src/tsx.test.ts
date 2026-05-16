@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { extractAppFromTsx, extractPageFromTsx } from "./tsx";
+import {
+  extractAppFromTsx,
+  extractPageFromTsx,
+  extractPageModuleFromTsx,
+} from "./tsx";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixtureRoot = resolve(here, "../../../fixtures/01-hello-text/astroforge");
@@ -87,6 +91,33 @@ describe("TSX extraction", () => {
           style: { kind: "static", value: { fontWeight: "bold" } },
         },
       },
+    });
+  });
+
+  it("extracts mixed inline object style as per-slot values", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useState } from '@astroforge/core';
+        export default function Page() {
+          const [theme, setTheme] = useState({ color: 'red' });
+          return <View style={{ color: theme.color, fontSize: 16 }} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect((page.template[0] as any).value.attrs.style).toEqual({
+      kind: "style_object",
+      value: [
+        {
+          name: "color",
+          value: {
+            kind: "dynamic",
+            value: { path: "theme.color", is_callable: false },
+          },
+        },
+        { name: "fontSize", value: { kind: "static", value: 16 } },
+      ],
     });
   });
 
@@ -408,6 +439,105 @@ describe("TSX extraction", () => {
       onInit: 'function onInit() {\n  console.log("page init");\n}',
       onReady: 'function onReady() {\n  console.log("page ready");\n}',
     });
+  });
+
+  it("lowers useEffect into Vela lifecycle hooks", () => {
+    const page = extractPageFromTsx(
+      `
+        import { Text, View, useEffect, useState } from '@astroforge/core';
+        export default function Page() {
+          const [message, setMessage] = useState('Ready');
+          useEffect(() => {
+            console.log(message);
+            return () => {
+              console.log('cleanup');
+            };
+          }, []);
+          return <View><Text>{message}</Text></View>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.lifecycle).toEqual({
+      onReady:
+        'function onReady() {\n  console.log(this.message);\n}',
+      onDestroy:
+        'function onDestroy() {\n  console.log("cleanup");\n}',
+    });
+  });
+
+  it("infers component props from TypeScript annotations", () => {
+    const module = extractPageModuleFromTsx(
+      `
+        import { Text, View } from '@astroforge/core';
+
+        interface CardProps {
+          title: string;
+          count?: number;
+          active?: boolean;
+          onTap?: () => void;
+        }
+
+        function Card({ title, count = 0, active }: CardProps) {
+          return <View><Text>{title}</Text><Text>{count}</Text><Text>{active}</Text></View>;
+        }
+
+        export default function Page() {
+          return <Card title="A" active={true} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+    const page = module.page;
+
+    expect(page.imports).toEqual({ card: "card" });
+    expect(page.template[0]).toMatchObject({
+      kind: "element",
+      value: {
+        tag: "card",
+        is_component: true,
+      },
+    });
+    expect(module.components.card.script.props).toEqual({
+      title: { type: "String" },
+      count: { type: "Number", default: 0 },
+      active: { type: "Boolean" },
+      onTap: { type: "Function" },
+    });
+  });
+
+  it("extracts CSS imports with an explicit loader", () => {
+    const page = extractPageFromTsx(
+      `
+        import './card.css';
+        import { View } from '@astroforge/core';
+        export const styles = '.title { color: red; }';
+        export default function Page() {
+          return <View className="card" />;
+        }
+      `,
+      {
+        route: "pages/index",
+        filename: "/src/pages/index.tsx",
+        loadStyle(specifier, importer) {
+          expect(specifier).toBe("./card.css");
+          expect(importer).toBe("/src/pages/index.tsx");
+          return ".card { padding: 8px; }";
+        },
+      },
+    );
+
+    expect(page.style.rules).toEqual([
+      {
+        selectors: [{ kind: "class", name: "card" }],
+        declarations: { padding: "8px" },
+      },
+      {
+        selectors: [{ kind: "class", name: "title" }],
+        declarations: { color: "red" },
+      },
+    ]);
   });
 
   it("extracts app lifecycle bodies from default export object", () => {

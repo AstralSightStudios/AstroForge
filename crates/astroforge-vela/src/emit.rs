@@ -5,7 +5,7 @@
 //! 归一化，字节级格式差异由 `astroforge-compat` 在后续阶段处理。
 
 use anyhow::{Context, Result};
-use astroforge_ir::component::{Attr, Binding, Element, List, Node};
+use astroforge_ir::component::{Attr, Binding, Element, List, Node, StyleSlotValue};
 use astroforge_ir::page::{Component, IrDocument, Page};
 use astroforge_ir::runtime::StyleEntry;
 use indexmap::IndexMap;
@@ -418,6 +418,10 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
                     "classList".to_owned(),
                     dynamic_function(&scope.binding_expr(binding)),
                 )),
+                Attr::StyleObject(slots) => opts.push((
+                    "classList".to_owned(),
+                    dynamic_function(&style_object_expr(slots, scope)),
+                )),
                 Attr::Static(value) => opts.push(("classList".to_owned(), json_source(value))),
             }
             continue;
@@ -433,6 +437,10 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
                         scope.binding_expr(binding)
                     )),
                 )),
+                Attr::StyleObject(slots) => opts.push((
+                    "style".to_owned(),
+                    dynamic_function(&style_object_expr(slots, scope)),
+                )),
             }
             continue;
         }
@@ -440,6 +448,7 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
         let value = match attr {
             Attr::Static(value) => json_source(value),
             Attr::Dynamic(binding) => dynamic_function(&scope.binding_expr(binding)),
+            Attr::StyleObject(slots) => dynamic_function(&style_object_expr(slots, scope)),
         };
         opts.push((name.clone(), value));
     }
@@ -468,6 +477,23 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
         &opts,
         &children,
     ))
+}
+
+fn style_object_expr(
+    slots: &[astroforge_ir::component::StyleSlot],
+    scope: &TemplateScope,
+) -> String {
+    let entries = slots
+        .iter()
+        .map(|slot| {
+            let value = match &slot.value {
+                StyleSlotValue::Static(value) => json_source(value),
+                StyleSlotValue::Dynamic(binding) => scope.binding_expr(binding),
+            };
+            (slot.name.clone(), value)
+        })
+        .collect();
+    object_source(entries)
 }
 
 enum ValueSource {
@@ -634,7 +660,9 @@ fn indent_lines(input: &str, spaces: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use astroforge_ir::component::{Attr, Binding, Conditional, ConditionalBranch, Element, Node};
+    use astroforge_ir::component::{
+        Attr, Binding, Conditional, ConditionalBranch, Element, Node, StyleSlot, StyleSlotValue,
+    };
     use serde_json::json;
 
     #[test]
@@ -664,6 +692,40 @@ mod tests {
         assert!(
             !js.contains("$translateStyle$"),
             "静态对象 style 不应包装在 $translateStyle$ 调用中"
+        );
+    }
+
+    #[test]
+    fn emits_mixed_style_object_as_dynamic_object() {
+        let mut attrs = IndexMap::new();
+        attrs.insert(
+            "style".to_owned(),
+            Attr::StyleObject(vec![
+                StyleSlot {
+                    name: "color".into(),
+                    value: StyleSlotValue::Dynamic(Binding {
+                        path: "theme.color".into(),
+                        is_callable: false,
+                    }),
+                },
+                StyleSlot {
+                    name: "fontSize".into(),
+                    value: StyleSlotValue::Static(json!(16)),
+                },
+            ]),
+        );
+        let node = Node::Element(Element {
+            tag: "div".into(),
+            is_component: false,
+            attrs,
+            events: IndexMap::new(),
+            children: vec![],
+        });
+
+        let js = node_expression(&node, &TemplateScope::default()).unwrap();
+        assert!(
+            js.contains("style: function() { return { color: _vm_.theme.color, fontSize: 16 }; }"),
+            "混合 style 应在模板闭包内组装对象，实际：{js}"
         );
     }
 
