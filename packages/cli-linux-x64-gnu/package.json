@@ -1,6 +1,6 @@
 {
   "name": "@astralsight/astroforge-cli-linux-x64-gnu",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "AstroForge CLI for linux-x64-gnu",
   "license": "MIT",
   "repository": {

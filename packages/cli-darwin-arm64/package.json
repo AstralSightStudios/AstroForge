@@ -1,6 +1,6 @@
 {
   "name": "@astralsight/astroforge-cli-darwin-arm64",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "AstroForge CLI for darwin-arm64",
   "license": "MIT",
   "repository": {

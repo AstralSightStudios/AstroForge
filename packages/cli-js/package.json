@@ -1,6 +1,6 @@
 {
   "name": "@astralsight/astroforge",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "AstroForge — a Rust-powered toolchain for smartwatch quick apps with React-like development.",
   "license": "MIT",
   "repository": {
@@ -32,11 +32,11 @@
     "node": ">=18.18"
   },
   "optionalDependencies": {
-    "@astralsight/astroforge-cli-darwin-arm64": "0.0.5",
-    "@astralsight/astroforge-cli-darwin-x64": "0.0.5",
-    "@astralsight/astroforge-cli-linux-x64-gnu": "0.0.5",
-    "@astralsight/astroforge-cli-linux-arm64-gnu": "0.0.5",
-    "@astralsight/astroforge-cli-win32-x64-msvc": "0.0.5",
-    "@astralsight/astroforge-cli-win32-arm64-msvc": "0.0.5"
+    "@astralsight/astroforge-cli-darwin-arm64": "0.0.6",
+    "@astralsight/astroforge-cli-darwin-x64": "0.0.6",
+    "@astralsight/astroforge-cli-linux-x64-gnu": "0.0.6",
+    "@astralsight/astroforge-cli-linux-arm64-gnu": "0.0.6",
+    "@astralsight/astroforge-cli-win32-x64-msvc": "0.0.6",
+    "@astralsight/astroforge-cli-win32-arm64-msvc": "0.0.6"
   }
 }
