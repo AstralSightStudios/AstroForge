@@ -5,7 +5,6 @@
   "versionCode": 1,
   "minPlatformVersion": 1200,
   "icon": "/common/logo.png",
-  "simulationVersion": "default",
   "deviceTypeList": [
     "watch"
   ],
@@ -24,6 +23,7 @@
     "logLevel": "log",
     "designWidth": "device-width"
   },
+  "simulationVersion": "default",
   "router": {
     "entry": "pages/index",
     "pages": {
@@ -35,7 +35,7 @@
   "minAPILevel": 1,
   "packageInfo": {
     "toolkit": "0.0.1",
-    "timeStamp": "2026-05-16T05:30:51.527037Z",
+    "timeStamp": "2026-05-16T06:08:47.704698Z",
     "node": "unknown",
     "platform": "darwin",
     "arch": "arm64",

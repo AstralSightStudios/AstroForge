@@ -35,6 +35,7 @@ fn sample_doc() -> IrDocument {
             entry: "pages/index".into(),
             pages: router_pages,
         },
+        source: None,
     };
 
     let mut doc = IrDocument::new(manifest);

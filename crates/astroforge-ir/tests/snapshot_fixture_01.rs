@@ -40,6 +40,7 @@ fn fixture_01_hello_text_ir_document() {
             entry: "pages/index".into(),
             pages: router_pages,
         },
+        source: None,
     };
 
     let mut doc = IrDocument::new(manifest);

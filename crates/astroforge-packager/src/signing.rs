@@ -1,22 +1,54 @@
 use std::env;
 use std::fs;
 use std::ops::Range;
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, ensure};
 use base64::Engine;
+use camino::Utf8Path;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs1v15::SigningKey;
 use rsa::pkcs8::{DecodePrivateKey, EncodePublicKey};
+use rsa::traits::PublicKeyParts;
 use rsa::{RsaPrivateKey, RsaPublicKey};
 use sha2::{Digest, Sha256};
 use signature::{SignatureEncoding, Signer};
 
+use crate::{PackageMode, SigningConfig};
+
 const DEFAULT_DEBUG_PRIVATE_PEM: &str = include_str!("signing/default_debug_private.pem");
 const DEFAULT_DEBUG_CERTIFICATE_PEM: &str = include_str!("signing/default_debug_certificate.pem");
+
+#[cfg(test)]
+pub(crate) const DEFAULT_DEBUG_PRIVATE_PEM_FOR_TEST: &str = DEFAULT_DEBUG_PRIVATE_PEM;
+#[cfg(test)]
+pub(crate) const DEFAULT_DEBUG_CERTIFICATE_PEM_FOR_TEST: &str = DEFAULT_DEBUG_CERTIFICATE_PEM;
 const SIG_MAGIC: &[u8; 16] = b"RPK Sig Block 42";
 const SIGNATURE_ALGORITHM_ID: u32 = 0x0103;
 const SIGNATURE_KV_ID: u32 = 0x0100_0101;
 const FILE_DIGEST_KV_ID: u32 = 0x0100_0201;
+
+const ENV_PRIVATE_KEY: &str = "ASTROFORGE_VELA_PRIVATE_KEY";
+const ENV_CERTIFICATE: &str = "ASTROFORGE_VELA_CERTIFICATE";
+
+/// 描述本次签名材料的来源，用于诊断输出与对照测试。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SigningSource {
+    /// 通过环境变量显式指定。
+    EnvVars {
+        private_key: PathBuf,
+        certificate: PathBuf,
+    },
+    /// 在项目签名目录下命中。`label` 标记命中的子目录（如
+    /// `"debug"`、`""`、`"release"`、`"oldRelease"`），便于日志区分。
+    ProjectPath {
+        label: &'static str,
+        private_key: PathBuf,
+        certificate: PathBuf,
+    },
+    /// 退化到 packager 内置的 debug 默认证书。仅 debug 模式允许。
+    DefaultDebug,
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct FileDigest {
@@ -29,6 +61,7 @@ pub(crate) struct PackageSigner {
     private_key: RsaPrivateKey,
     certificate_der: Vec<u8>,
     public_key_der: Vec<u8>,
+    source: SigningSource,
 }
 
 #[derive(Debug, Clone)]
@@ -39,32 +72,102 @@ struct ZipSections {
 }
 
 impl PackageSigner {
-    pub(crate) fn from_env_or_default() -> Result<Self> {
-        match (
-            env::var_os("ASTROFORGE_VELA_PRIVATE_KEY"),
-            env::var_os("ASTROFORGE_VELA_CERTIFICATE"),
-        ) {
-            (Some(private_path), Some(certificate_path)) => {
-                let private_pem = fs::read_to_string(&private_path).with_context(|| {
-                    format!("读取 Vela 私钥失败：{}", private_path.to_string_lossy())
-                })?;
-                let certificate_pem = fs::read_to_string(&certificate_path).with_context(|| {
-                    format!("读取 Vela 证书失败：{}", certificate_path.to_string_lossy())
-                })?;
-                Self::from_pem(&private_pem, &certificate_pem)
+    /// 解析签名材料。优先级与 aiot-toolkit `SignUtil.getProjectSignConfig`
+    /// 一致：
+    ///
+    /// 1. 环境变量 `ASTROFORGE_VELA_PRIVATE_KEY` / `..._CERTIFICATE`
+    ///    （两个必须同时存在；仅设其一报错）。
+    /// 2. 项目签名目录扫描（`sign_root` 默认 `<project_root>/sign`）：
+    ///    - debug 模式：`sign/debug/{private,certificate}.pem` →
+    ///      `sign/{private,certificate}.pem` → 内置 debug 默认证书。
+    ///    - release 模式：`sign/release/{private,certificate}.pem` →
+    ///      `sign/{private,certificate}.pem`；都不存在直接报错（不可使用
+    ///      内置 debug 证书签 release 包）。
+    pub(crate) fn discover(config: &SigningConfig) -> Result<Self> {
+        if let Some((private_path, certificate_path)) = env_signing_pair()? {
+            let private_pem = fs::read_to_string(&private_path).with_context(|| {
+                format!("读取 Vela 私钥失败：{}", private_path.display())
+            })?;
+            let certificate_pem = fs::read_to_string(&certificate_path).with_context(|| {
+                format!("读取 Vela 证书失败：{}", certificate_path.display())
+            })?;
+            return Self::from_pem(
+                &private_pem,
+                &certificate_pem,
+                SigningSource::EnvVars {
+                    private_key: private_path,
+                    certificate: certificate_path,
+                },
+            );
+        }
+
+        if let Some(sign_root) = config.sign_root() {
+            for candidate in project_candidates(&sign_root, config.mode) {
+                if candidate.private_key.exists() && candidate.certificate.exists() {
+                    let private_pem = fs::read_to_string(&candidate.private_key)
+                        .with_context(|| {
+                            format!(
+                                "读取项目签名私钥失败：{}",
+                                candidate.private_key.display()
+                            )
+                        })?;
+                    let certificate_pem = fs::read_to_string(&candidate.certificate)
+                        .with_context(|| {
+                            format!(
+                                "读取项目签名证书失败：{}",
+                                candidate.certificate.display()
+                            )
+                        })?;
+                    return Self::from_pem(
+                        &private_pem,
+                        &certificate_pem,
+                        SigningSource::ProjectPath {
+                            label: candidate.label,
+                            private_key: candidate.private_key,
+                            certificate: candidate.certificate,
+                        },
+                    );
+                }
             }
-            (None, None) => {
-                Self::from_pem(DEFAULT_DEBUG_PRIVATE_PEM, DEFAULT_DEBUG_CERTIFICATE_PEM)
-            }
-            _ => {
-                anyhow::bail!(
-                    "ASTROFORGE_VELA_PRIVATE_KEY 与 ASTROFORGE_VELA_CERTIFICATE 必须同时设置"
-                )
-            }
+        }
+
+        match config.mode {
+            PackageMode::Debug => Self::from_pem(
+                DEFAULT_DEBUG_PRIVATE_PEM,
+                DEFAULT_DEBUG_CERTIFICATE_PEM,
+                SigningSource::DefaultDebug,
+            ),
+            PackageMode::Release => anyhow::bail!(
+                "未找到 release 签名材料：请设置 ASTROFORGE_VELA_PRIVATE_KEY/ASTROFORGE_VELA_CERTIFICATE，或在项目下放置 sign/release/private.pem 与 sign/release/certificate.pem（也可放在 sign/ 根目录）"
+            ),
         }
     }
 
-    fn from_pem(private_pem: &str, certificate_pem: &str) -> Result<Self> {
+    /// 暴露给打包器：本次签名材料的来源描述，写入打包 report 供 CLI 显示。
+    pub(crate) fn source(&self) -> &SigningSource {
+        &self.source
+    }
+
+    /// 暴露给打包器：基于 SPKI DER 派生的公钥指纹（SHA-256 hex 截前 16 位），
+    /// 用于 `astroforge inspect rpk` 输出与远程证书比对。
+    pub(crate) fn public_key_fingerprint(&self) -> String {
+        let mut hex = String::with_capacity(16);
+        for byte in &Sha256::digest(&self.public_key_der)[..8] {
+            hex.push_str(&format!("{byte:02x}"));
+        }
+        hex
+    }
+
+    /// 暴露给打包器：RSA 模数比特位长度。Vela 设备一般要求 ≥ 2048。
+    pub(crate) fn modulus_bits(&self) -> usize {
+        self.private_key.size() * 8
+    }
+
+    fn from_pem(
+        private_pem: &str,
+        certificate_pem: &str,
+        source: SigningSource,
+    ) -> Result<Self> {
         let private_key = match RsaPrivateKey::from_pkcs1_pem(private_pem) {
             Ok(private_key) => private_key,
             Err(_) => {
@@ -82,12 +185,51 @@ impl PackageSigner {
             private_key,
             certificate_der,
             public_key_der,
+            source,
         })
     }
 
     fn sign(&self, bytes: &[u8]) -> Vec<u8> {
         let signing_key = SigningKey::<Sha256>::new(self.private_key.clone());
         signing_key.sign(bytes).to_vec()
+    }
+}
+
+fn env_signing_pair() -> Result<Option<(PathBuf, PathBuf)>> {
+    match (env::var_os(ENV_PRIVATE_KEY), env::var_os(ENV_CERTIFICATE)) {
+        (Some(private), Some(certificate)) => Ok(Some((private.into(), certificate.into()))),
+        (None, None) => Ok(None),
+        _ => anyhow::bail!(
+            "{ENV_PRIVATE_KEY} 与 {ENV_CERTIFICATE} 必须同时设置",
+        ),
+    }
+}
+
+struct ProjectCandidate {
+    label: &'static str,
+    private_key: PathBuf,
+    certificate: PathBuf,
+}
+
+fn project_candidates(sign_root: &Utf8Path, mode: PackageMode) -> Vec<ProjectCandidate> {
+    let pair = |sub: &str, label: &'static str| {
+        let dir = if sub.is_empty() {
+            sign_root.to_path_buf()
+        } else {
+            sign_root.join(sub)
+        };
+        ProjectCandidate {
+            label,
+            private_key: dir.join("private.pem").into_std_path_buf(),
+            certificate: dir.join("certificate.pem").into_std_path_buf(),
+        }
+    };
+    match mode {
+        PackageMode::Debug => vec![pair("debug", "debug"), pair("", "root")],
+        // release 路径与 aiot `oldRelease`/`sign` 一致，覆盖两种工作流：
+        // - 严格分目录（`sign/release/...`）：审计友好；
+        // - 单一目录（`sign/...`）：CI 共用一组生产证书。
+        PackageMode::Release => vec![pair("release", "release"), pair("", "root")],
     }
 }
 
@@ -115,11 +257,17 @@ pub(crate) fn sign_zip_package(
     Ok(signed)
 }
 
-#[cfg(test)]
-pub(crate) fn has_signature_block(bytes: &[u8]) -> bool {
+/// 在任意 zip buffer（外层 rpk 或内层 META-INF/CERT）中扫描 `RPK Sig Block 42`
+/// 魔法字符串，判断该 zip 是否携带 Vela V2 签名块。
+pub(crate) fn has_rpk_signature_block(bytes: &[u8]) -> bool {
     bytes
         .windows(SIG_MAGIC.len())
         .any(|window| window == SIG_MAGIC)
+}
+
+#[cfg(test)]
+pub(crate) fn has_signature_block(bytes: &[u8]) -> bool {
+    has_rpk_signature_block(bytes)
 }
 
 fn make_sign_chunk(

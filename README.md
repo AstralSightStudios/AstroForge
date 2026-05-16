@@ -18,18 +18,27 @@
 
 - Phase 0：Vela 运行时 ABI 研究骨架与 aiot-toolkit 源码缓存已建立。
 - Phase 1：Rust 侧 IR、schema、I/O、diff 基础设施已落地。
-- Phase 2：`@astroforge/rsbuild-plugin` 已能从静态文本、点击事件、
-  `useState` counter、条件渲染、列表渲染和生命周期 fixtures 的 TSX 页面生成
-  符合 `docs/ir-document.schema.json` 的 IR 文件。
-- Phase 3：`astroforge-vela` 已能将 Page IR 下沉并打印 Vela-compatible
-  `app.js`、页面 JS、样式表、事件、系统 API bridge、条件与列表包装调用。
-- Phase 4：`astroforge-packager` 已能生成带 Vela 签名块的 debug `.rpk`，并
-  提供 `inspect rpk` 与 `unpack`。
-- Phase 5：`astroforge test-compat --official` 已能批量驱动 18 个 fixtures，
-  同时写出 `golden/astroforge/` 与 `golden/aiot/` 产物，并比较文件结构、
-  manifest、运行时调用序列与 RPK 容器结构诊断信息。
-- Phase 6：`init`、`dev`、`build`、`release`、`install`、`log` 已接入基础
-  命令行为；设备安装和日志通过环境变量适配器接入。
+- Phase 2：`@astroforge/rsbuild-plugin` 能从静态文本、点击事件、`useState`
+  counter、条件渲染、列表渲染、生命周期等 18 个 fixture 的 TSX 页面生成
+  符合 `docs/ir-document.schema.json` 的 IR 文件；支持跨文件相对路径组件
+  import（BFS 加载、循环去重、可达组件递归）；manifest 未知字段按源序透传。
+- Phase 3：`astroforge-vela` 将 Page IR 下沉并打印 Vela-compatible
+  `app.js`、页面 JS、样式表、事件、系统 API bridge、条件与列表包装调用；
+  manifest source 优先策略保证用户书写顺序与扩展字段全量保留。
+- Phase 4：`astroforge-packager` 生成带 Vela `RPK Sig Block 42` 双层签名块的
+  `.rpk`，文件排序、CERT 内层零 comment、build.txt 字节序列均与 aiot-toolkit
+  字节级对齐；`inspect rpk` 显示签名块状态、hash.json 摘要数、build.txt 元
+  数据。
+- Phase 5：`astroforge test-compat --official` 批量驱动 18 个 fixture 双侧
+  构建并 diff（files / manifest / runtime_calls / rpk_structure），目前全部
+  0 diff；`cargo test -p astroforge-compat --test compat_goldens` 提供无
+  aiot-toolkit 依赖的回归网。
+- Phase 6：`init` 生成可直接 `pnpm install && pnpm exec astroforge build` 的
+  完整骨架（含 package.json、tsconfig.json、rsbuild.config.ts、common 资源）；
+  `dev` 联动 Rsbuild 与 notify-debouncer 监听 IR 缓存，每次源码变更后增量
+  重打 rpk，可选 `--install` 触发设备钩子；`build` / `release` 按模式查找
+  签名材料（与 aiot-toolkit `sign/{debug,release}` 路径一致），release 模式
+  缺失材料时直接报错，绝不退化到内置 debug 证书。
 
 常用验证命令：
 

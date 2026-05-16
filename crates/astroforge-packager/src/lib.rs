@@ -34,24 +34,103 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 mod signing;
 
+pub use signing::SigningSource;
 use signing::{FileDigest, PackageSigner, sign_zip_package};
 
 const META_CERT: &str = "META-INF/CERT";
 const META_BUILD: &str = "META-INF/build.txt";
+
+/// 包构建模式。影响签名材料发现与默认证书 fallback。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PackageMode {
+    /// debug 默认；未提供项目签名材料时退化到内置 debug 证书。
+    #[default]
+    Debug,
+    /// release 模式：未提供签名材料时直接报错，绝不退化到默认证书。
+    Release,
+}
+
+/// 签名材料查找配置。
+///
+/// 若两端都未提供：debug 使用内置默认证书，release 直接报错。
+#[derive(Debug, Clone, Default)]
+pub struct SigningConfig {
+    /// 包构建模式。
+    pub mode: PackageMode,
+    /// 项目根目录，默认 sign 目录为 `<project_root>/sign`。
+    pub project_root: Option<Utf8PathBuf>,
+    /// 显式覆盖签名根目录，优先级高于 `project_root`。
+    pub sign_root: Option<Utf8PathBuf>,
+}
+
+impl SigningConfig {
+    pub fn debug() -> Self {
+        Self {
+            mode: PackageMode::Debug,
+            project_root: None,
+            sign_root: None,
+        }
+    }
+
+    pub fn release() -> Self {
+        Self {
+            mode: PackageMode::Release,
+            project_root: None,
+            sign_root: None,
+        }
+    }
+
+    pub fn with_project_root(mut self, root: Utf8PathBuf) -> Self {
+        self.project_root = Some(root);
+        self
+    }
+
+    pub fn with_sign_root(mut self, sign_root: Utf8PathBuf) -> Self {
+        self.sign_root = Some(sign_root);
+        self
+    }
+
+    pub(crate) fn sign_root(&self) -> Option<Utf8PathBuf> {
+        self.sign_root
+            .clone()
+            .or_else(|| self.project_root.as_ref().map(|root| root.join("sign")))
+    }
+}
+
+/// `pack` 的可选参数集合。沿用 builder 思路便于后续扩展（jsc / lite card / sub package 等）。
+#[derive(Debug, Clone, Default)]
+pub struct PackOptions {
+    pub signing: SigningConfig,
+}
 
 /// rpk 打包结果摘要。
 #[derive(Debug, Clone, Serialize)]
 pub struct PackReport {
     pub out: Utf8PathBuf,
     pub files: Vec<String>,
+    pub signing: SigningSummary,
+}
+
+/// 签名材料来源摘要，写入 [`PackReport`] 供 CLI 输出与 CI 审计。
+#[derive(Debug, Clone, Serialize)]
+pub struct SigningSummary {
+    /// 签名材料来源的可读描述。
+    pub source: String,
+    /// 公钥指纹（SHA-256 SPKI 截前 8 字节，16 hex 字符）。
+    pub public_key_fingerprint: String,
+    /// RSA 模数比特位长度。
+    pub modulus_bits: usize,
 }
 
 /// rpk inspect 摘要。
 #[derive(Debug, Clone, Serialize)]
 pub struct RpkInfo {
     pub path: Utf8PathBuf,
+    pub archive_size: u64,
+    pub comment_keys: Vec<String>,
     pub files: Vec<RpkFile>,
     pub manifest: Option<serde_json::Value>,
+    pub signature: RpkSignatureInfo,
 }
 
 /// rpk 内单个文件条目。
@@ -62,14 +141,40 @@ pub struct RpkFile {
     pub compressed_size: u64,
 }
 
-/// 组装 Vela debug rpk。
+/// rpk 双层签名摘要（外层 zip + 内层 META-INF/CERT）。
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct RpkSignatureInfo {
+    /// 外层 rpk 签名块是否存在。
+    pub outer_present: bool,
+    /// 内层 META-INF/CERT 是否存在；存在时同样应携带签名块。
+    pub cert_present: bool,
+    /// 内层 cert 签名块是否存在。
+    pub cert_signature_present: bool,
+    /// META-INF/CERT 中 hash.json 记录的文件摘要条目数（0 表示无法解析）。
+    pub cert_digest_count: usize,
+    /// META-INF/CERT 中 hash.json 使用的摘要算法（通常为 `SHA-256`）。
+    pub cert_digest_algorithm: Option<String>,
+    /// META-INF/build.txt 内容；inspect 时直接渲染便于排查时间戳 / toolkit 来源。
+    pub build_txt: Option<String>,
+}
+
+/// 组装 Vela debug rpk（兼容旧调用形式，等价于 `pack_with(.., &PackOptions::default())`）。
 pub fn pack(build: &astroforge_vela::VelaBuildOutput, out: &Utf8Path) -> Result<PackReport> {
+    pack_with(build, out, &PackOptions::default())
+}
+
+/// 组装 Vela rpk 并按 [`PackOptions`] 选择签名材料。
+pub fn pack_with(
+    build: &astroforge_vela::VelaBuildOutput,
+    out: &Utf8Path,
+    options: &PackOptions,
+) -> Result<PackReport> {
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent).with_context(|| format!("创建输出目录失败：{parent}"))?;
     }
 
     let metadata = PackageMetadata::current();
-    let signer = PackageSigner::from_env_or_default()?;
+    let signer = PackageSigner::discover(&options.signing)?;
     let files = build_package_files(build, &metadata, &signer)?;
     let cursor = Cursor::new(Vec::new());
     let (cursor, written) = write_zip_package(cursor, &files, &metadata.zip_comment())?;
@@ -79,6 +184,7 @@ pub fn pack(build: &astroforge_vela::VelaBuildOutput, out: &Utf8Path) -> Result<
     Ok(PackReport {
         out: out.to_owned(),
         files: written,
+        signing: signing_summary(&signer),
     })
 }
 
@@ -87,19 +193,48 @@ pub fn write_unpacked(
     build: &astroforge_vela::VelaBuildOutput,
     out: &Utf8Path,
 ) -> Result<Vec<String>> {
+    write_unpacked_with(build, out, &PackOptions::default())
+}
+
+/// `write_unpacked` 的可配置版本，便于 CLI 在同一 PackOptions 下复用。
+pub fn write_unpacked_with(
+    build: &astroforge_vela::VelaBuildOutput,
+    out: &Utf8Path,
+    options: &PackOptions,
+) -> Result<Vec<String>> {
     if out.exists() {
         fs::remove_dir_all(out).with_context(|| format!("清理旧输出目录失败：{out}"))?;
     }
     fs::create_dir_all(out).with_context(|| format!("创建输出目录失败：{out}"))?;
 
     let metadata = PackageMetadata::current();
-    let signer = PackageSigner::from_env_or_default()?;
+    let signer = PackageSigner::discover(&options.signing)?;
     let files = build_package_files(build, &metadata, &signer)?;
     let mut written = Vec::new();
     for file in files {
         write_disk_bytes(out, &file.path, &file.bytes, &mut written)?;
     }
     Ok(written)
+}
+
+fn signing_summary(signer: &PackageSigner) -> SigningSummary {
+    SigningSummary {
+        source: signing_source_label(signer.source()),
+        public_key_fingerprint: signer.public_key_fingerprint(),
+        modulus_bits: signer.modulus_bits(),
+    }
+}
+
+fn signing_source_label(source: &SigningSource) -> String {
+    match source {
+        SigningSource::EnvVars { private_key, .. } => {
+            format!("env:{}", private_key.display())
+        }
+        SigningSource::ProjectPath {
+            label, private_key, ..
+        } => format!("project:{label}:{}", private_key.display()),
+        SigningSource::DefaultDebug => "default-debug".to_owned(),
+    }
 }
 
 /// 打包阶段写入 `META-INF/build.txt`、外层 zip comment 与 `manifest.json.packageInfo`
@@ -453,12 +588,27 @@ pub fn unpack(rpk: &Utf8Path, out: &Utf8Path) -> Result<Vec<String>> {
     Ok(files)
 }
 
-/// 读取 rpk 文件清单与 manifest。
+/// 读取 rpk 文件清单、manifest 与签名状态。
+///
+/// 包含三层校验：
+/// 1. 外层 zip 的 `RPK Sig Block 42` 是否存在；
+/// 2. `META-INF/CERT` 是否存在，并对应的内层 zip 是否同样携带签名块；
+/// 3. 内层 `hash.json` 是否能够解析出文件摘要列表，便于交叉对照
+///    `astroforge inspect rpk` 与外部签名校验工具。
+///
+/// `build.txt` 内容也一并随 `RpkInfo` 返回，CLI 显示可看到 timeStamp /
+/// toolkit / node / platform / arch 等打包元数据。
 pub fn inspect(rpk: &Utf8Path) -> Result<RpkInfo> {
-    let file = File::open(rpk).with_context(|| format!("打开 rpk 失败：{rpk}"))?;
-    let mut archive = ZipArchive::new(file).with_context(|| format!("读取 rpk 失败：{rpk}"))?;
+    let bytes = fs::read(rpk).with_context(|| format!("打开 rpk 失败：{rpk}"))?;
+    let archive_size = bytes.len() as u64;
+    let mut archive =
+        ZipArchive::new(Cursor::new(&bytes)).with_context(|| format!("读取 rpk 失败：{rpk}"))?;
+
+    let comment_keys = comment_json_keys(archive.comment());
     let mut files = Vec::new();
     let mut manifest = None;
+    let mut cert_bytes = None;
+    let mut build_txt = None;
 
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).context("读取 zip 条目失败")?;
@@ -472,6 +622,18 @@ pub fn inspect(rpk: &Utf8Path) -> Result<RpkInfo> {
                 .read_to_string(&mut s)
                 .context("读取 manifest.json 失败")?;
             manifest = Some(serde_json::from_str(&s).context("解析 manifest.json 失败")?);
+        } else if name == META_CERT {
+            let mut buf = Vec::new();
+            entry
+                .read_to_end(&mut buf)
+                .context("读取 META-INF/CERT 失败")?;
+            cert_bytes = Some(buf);
+        } else if name == META_BUILD {
+            let mut s = String::new();
+            entry
+                .read_to_string(&mut s)
+                .context("读取 META-INF/build.txt 失败")?;
+            build_txt = Some(s);
         }
         files.push(RpkFile {
             path: name,
@@ -480,11 +642,65 @@ pub fn inspect(rpk: &Utf8Path) -> Result<RpkInfo> {
         });
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let signature = inspect_signature(&bytes, cert_bytes.as_deref(), build_txt);
+
     Ok(RpkInfo {
         path: rpk.to_owned(),
+        archive_size,
+        comment_keys,
         files,
         manifest,
+        signature,
     })
+}
+
+fn comment_json_keys(comment: &[u8]) -> Vec<String> {
+    let Ok(value) = serde_json::from_slice::<Value>(comment) else {
+        return Vec::new();
+    };
+    let Some(object) = value.as_object() else {
+        return Vec::new();
+    };
+    object.keys().cloned().collect()
+}
+
+fn inspect_signature(
+    outer_bytes: &[u8],
+    cert_bytes: Option<&[u8]>,
+    build_txt: Option<String>,
+) -> RpkSignatureInfo {
+    let outer_present = signing::has_rpk_signature_block(outer_bytes);
+    let mut info = RpkSignatureInfo {
+        outer_present,
+        cert_present: cert_bytes.is_some(),
+        build_txt,
+        ..RpkSignatureInfo::default()
+    };
+
+    let Some(cert) = cert_bytes else {
+        return info;
+    };
+
+    info.cert_signature_present = signing::has_rpk_signature_block(cert);
+
+    if let Ok(mut cert_zip) = ZipArchive::new(Cursor::new(cert))
+        && let Ok(mut hash_entry) = cert_zip.by_name("hash.json")
+    {
+        let mut hash_text = String::new();
+        if hash_entry.read_to_string(&mut hash_text).is_ok()
+            && let Ok(value) = serde_json::from_str::<Value>(&hash_text)
+            && let Some(object) = value.as_object()
+        {
+            if let Some(algo) = object.get("algorithm").and_then(Value::as_str) {
+                info.cert_digest_algorithm = Some(algo.to_owned());
+            }
+            if let Some(digests) = object.get("digests").and_then(Value::as_object) {
+                info.cert_digest_count = digests.len();
+            }
+        }
+    }
+    info
 }
 
 fn write_zip_package<W: Write + Seek>(
@@ -670,6 +886,83 @@ mod tests {
         assert!(comment.starts_with('{'));
         assert!(comment.contains("\"toolkit\":\"0.0.1\""));
         assert!(!comment.contains("originType"));
+    }
+
+    #[test]
+    fn signing_discovers_project_debug_then_root_then_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Utf8Path::from_path(tmp.path()).unwrap().to_owned();
+
+        // 1) 完全没有项目签名材料：debug 模式回退到内置默认证书。
+        let default = PackageSigner::discover(&SigningConfig {
+            mode: PackageMode::Debug,
+            project_root: Some(root.clone()),
+            sign_root: None,
+        })
+        .unwrap();
+        assert!(matches!(default.source(), SigningSource::DefaultDebug));
+
+        // 2) 仅 sign/ 根目录：被命中为 root 标签。
+        let sign_dir = root.join("sign");
+        fs::create_dir_all(&sign_dir).unwrap();
+        fs::write(
+            sign_dir.join("private.pem"),
+            signing::DEFAULT_DEBUG_PRIVATE_PEM_FOR_TEST,
+        )
+        .unwrap();
+        fs::write(
+            sign_dir.join("certificate.pem"),
+            signing::DEFAULT_DEBUG_CERTIFICATE_PEM_FOR_TEST,
+        )
+        .unwrap();
+        let root_hit = PackageSigner::discover(&SigningConfig {
+            mode: PackageMode::Debug,
+            project_root: Some(root.clone()),
+            sign_root: None,
+        })
+        .unwrap();
+        assert!(matches!(
+            root_hit.source(),
+            SigningSource::ProjectPath { label: "root", .. }
+        ));
+
+        // 3) sign/debug 存在时优先级高于 sign/ 根目录。
+        let debug_dir = sign_dir.join("debug");
+        fs::create_dir_all(&debug_dir).unwrap();
+        fs::write(
+            debug_dir.join("private.pem"),
+            signing::DEFAULT_DEBUG_PRIVATE_PEM_FOR_TEST,
+        )
+        .unwrap();
+        fs::write(
+            debug_dir.join("certificate.pem"),
+            signing::DEFAULT_DEBUG_CERTIFICATE_PEM_FOR_TEST,
+        )
+        .unwrap();
+        let debug_hit = PackageSigner::discover(&SigningConfig {
+            mode: PackageMode::Debug,
+            project_root: Some(root.clone()),
+            sign_root: None,
+        })
+        .unwrap();
+        assert!(matches!(
+            debug_hit.source(),
+            SigningSource::ProjectPath { label: "debug", .. }
+        ));
+    }
+
+    #[test]
+    fn signing_release_without_material_errors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = Utf8Path::from_path(tmp.path()).unwrap().to_owned();
+        let err = PackageSigner::discover(&SigningConfig {
+            mode: PackageMode::Release,
+            project_root: Some(root),
+            sign_root: None,
+        })
+        .unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("release"), "错误信息应说明缺失 release 材料：{msg}");
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -485,6 +485,111 @@ describe("AstroForge project compiler", () => {
     ]);
     expect(validateIrDocument(document)).toBe(true);
   });
+
+  it("preserves manifest source order and unknown fields end-to-end", () => {
+    const { document } = compileFixture(fixtureRoot);
+    expect(document.manifest.source).toBeDefined();
+    const source = document.manifest.source!;
+    // 用户书写顺序：package, name, versionName, versionCode, minPlatformVersion,
+    // icon, deviceTypeList, config（fixture 01 没写 simulationVersion / features，
+    // project.ts 自动补齐于尾部前），router 始终从扫描派生写到末尾。
+    expect(Object.keys(source)).toEqual([
+      "package",
+      "name",
+      "versionName",
+      "versionCode",
+      "minPlatformVersion",
+      "icon",
+      "deviceTypeList",
+      "config",
+      "simulationVersion",
+      "features",
+      "router",
+    ]);
+  });
+
+  it("recursively loads cross-file components via relative imports", () => {
+    const tmpRoot = mkdtempSync(join(tmpdir(), "astroforge-crossfile-"));
+    const srcRoot = join(tmpRoot, "src");
+    mkdirSync(join(srcRoot, "pages/index"), { recursive: true });
+    mkdirSync(join(srcRoot, "components"), { recursive: true });
+    mkdirSync(join(srcRoot, "common"), { recursive: true });
+
+    writeFileSync(
+      join(srcRoot, "pages/index/index.tsx"),
+      `import { View } from "@astroforge/core";
+import { Card } from "../../components/Card";
+import { Badge } from "../../components/Badge";
+
+export default function IndexPage() {
+  return (
+    <View>
+      <Card />
+      <Badge />
+    </View>
+  );
+}
+`,
+    );
+    writeFileSync(
+      join(srcRoot, "components/Card.tsx"),
+      `import { Text, View } from "@astroforge/core";
+import { Badge } from "./Badge";
+
+export function Card() {
+  return (
+    <View>
+      <Text>Card body</Text>
+      <Badge />
+    </View>
+  );
+}
+`,
+    );
+    writeFileSync(
+      join(srcRoot, "components/Badge.tsx"),
+      `import { Text } from "@astroforge/core";
+
+export function Badge() {
+  return <Text>Badge text</Text>;
+}
+`,
+    );
+    writeFileSync(
+      join(tmpRoot, "astroforge.config.ts"),
+      `export default {
+  manifest: {
+    package: "com.example.crossfile",
+    name: "crossfile",
+    versionName: "0.0.0",
+    versionCode: 1,
+    minPlatformVersion: 1200,
+    icon: "/common/logo.png",
+    deviceTypeList: ["watch"],
+  },
+};
+`,
+    );
+    writeFileSync(join(srcRoot, "common/logo.png"), Buffer.alloc(0));
+
+    const { document } = compileAstroForgeProject({
+      root: tmpRoot,
+      outFile: join(tmpRoot, "ir-document.json"),
+    });
+    // Card 与 Badge 都应进入 components 表（且 Badge 只加载一次：BFS 去重）。
+    expect(Object.keys(document.components).sort()).toEqual(["badge", "card"]);
+    expect(document.components.card.template[0]).toMatchObject({
+      kind: "element",
+    });
+    expect(document.components.badge.template[0]).toMatchObject({
+      kind: "element",
+      value: { tag: "text" },
+    });
+    expect(document.pages["pages/index"].imports).toEqual({
+      card: "card",
+      badge: "badge",
+    });
+  });
 });
 
 function compileFixture(root: string) {
@@ -513,8 +618,16 @@ function readRustFixtureSnapshot() {
 }
 
 function withoutAssets(document: any) {
+  // Rust 快照里 manifest.source 字段缺失（snapshot 单测以 `source: None`
+  // 构造 Manifest，serde `skip_serializing_if = "Option::is_none"` 略去）。
+  // 此处剥离 manifest.source 让 TSX 端生成的文档与之等价比较；source 行为
+  // 由 `manifest 源对象保留` 一节独立断言。
+  const { manifest, ...rest } = document;
+  const manifestWithoutSource = { ...manifest };
+  delete manifestWithoutSource.source;
   return {
-    ...document,
+    ...rest,
+    manifest: manifestWithoutSource,
     assets: [],
   };
 }

@@ -5,15 +5,15 @@
   "versionCode": 1,
   "minPlatformVersion": 1200,
   "icon": "/common/logo.svg",
-  "simulationVersion": "default",
   "deviceTypeList": [
     "watch"
   ],
-  "features": [],
   "config": {
     "logLevel": "log",
     "designWidth": "device-width"
   },
+  "simulationVersion": "default",
+  "features": [],
   "router": {
     "entry": "pages/index",
     "pages": {

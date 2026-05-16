@@ -29,6 +29,10 @@ export interface Manifest {
   features: Feature[];
   config: AppConfig;
   router: Router;
+  // 源 manifest 的 camelCase 原始对象，按用户书写顺序保留所有字段（含
+  // IR 未显式建模的扩展字段）。Vela 后端在生成 `manifest.json` 时优先以
+  // 此对象作为基础。
+  source?: Record<string, JsonValue>;
 }
 
 export interface Feature {

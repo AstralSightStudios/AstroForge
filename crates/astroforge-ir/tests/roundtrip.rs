@@ -86,6 +86,7 @@ fn page_ir_document_minimal() {
             entry: "pages/index".into(),
             pages: router_pages,
         },
+        source: None,
     };
 
     let mut doc = IrDocument::new(manifest);

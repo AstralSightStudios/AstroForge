@@ -17,6 +17,9 @@ export interface AstroForgeManifestInput {
     logLevel?: string;
     designWidth?: string;
   };
+  // AstroForge IR 不会丢弃用户在 manifest 中声明的任何额外字段。本类型仅
+  // 列出做强校验的字段，其余键会按源顺序透传到 Vela `manifest.json` 中。
+  [extra: string]: JsonValue | undefined;
 }
 
 export interface AstroForgeProjectConfig {

@@ -32,9 +32,21 @@ enum Command {
     },
 
     /// 启动开发服务器，监听源码变化并增量重建。
+    ///
+    /// 内部会同时启动 Rsbuild dev（驱动 TSX → IR）与 Rust 后端 watcher
+    /// （IR → Vela JS → rpk）。可选地在每次 rpk 更新后执行设备安装钩子。
     Dev {
         #[arg(long, default_value = ".")]
         root: Utf8PathBuf,
+
+        /// 每次 rpk 更新完成后自动调用 install 钩子（等价于
+        /// `astroforge install <rpk>`）。
+        #[arg(long)]
+        install: bool,
+
+        /// 不启动 Rsbuild（适用于上层流水线已自行重建 IR 的场景）。
+        #[arg(long)]
+        no_rsbuild: bool,
     },
 
     /// 一次性产出 debug 构建。
@@ -140,7 +152,11 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Init { path } => run_init(&path),
-        Command::Dev { root } => run_dev(&root),
+        Command::Dev {
+            root,
+            install,
+            no_rsbuild,
+        } => run_dev(&root, install, no_rsbuild),
         Command::Build {
             target,
             root,
@@ -186,65 +202,187 @@ fn run_inspect(cmd: InspectCommand) -> Result<()> {
 fn run_init(path: &camino::Utf8Path) -> Result<()> {
     fs::create_dir_all(path.join("src/pages/index"))
         .with_context(|| format!("创建项目目录失败：{path}"))?;
-    write_new_file(&path.join("src/app.tsx"), "export default {};\n")?;
+    fs::create_dir_all(path.join("src/common"))
+        .with_context(|| format!("创建 common 目录失败：{path}"))?;
+
+    let default_name = path
+        .file_name()
+        .filter(|s| !s.is_empty() && *s != "." && *s != "..")
+        .unwrap_or("astroforge-app")
+        .to_owned();
+    let default_package = format!("com.example.{}", default_name.replace('-', ""));
+
+    write_new_file(&path.join("src/app.tsx"), include_str!("templates/app.tsx"))?;
     write_new_file(
         &path.join("src/pages/index/index.tsx"),
-        r#"import { Text, View } from "@astroforge/core";
-
-export default function IndexPage() {
-  return (
-    <View>
-      <Text>Hello, Vela!</Text>
-    </View>
-  );
-}
-"#,
+        include_str!("templates/index.tsx"),
+    )?;
+    write_new_file(
+        &path.join("src/common/logo.svg"),
+        include_str!("templates/logo.svg"),
     )?;
     write_new_file(
         &path.join("astroforge.config.ts"),
-        r#"export default {
-  manifest: {
-    package: "com.example.astroforge",
-    name: "astroforge-app",
-    versionName: "1.0.0",
-    versionCode: 1,
-    minPlatformVersion: 1200,
-    icon: "/common/logo.png",
-    deviceTypeList: ["watch"],
-    config: { logLevel: "log", designWidth: "device-width" },
-  },
-  plugin: { target: "vela" },
-};
-"#,
+        &include_str!("templates/astroforge.config.ts")
+            .replace("{PACKAGE}", &default_package)
+            .replace("{NAME}", &default_name),
     )?;
     write_new_file(
         &path.join("rsbuild.config.ts"),
-        r#"import { defineConfig } from "@rsbuild/core";
-import { pluginAstroForge } from "@astroforge/rsbuild-plugin";
-
-export default defineConfig({
-  plugins: [pluginAstroForge()],
-});
-"#,
+        include_str!("templates/rsbuild.config.ts"),
     )?;
+    write_new_file(
+        &path.join("package.json"),
+        &include_str!("templates/package.json").replace("{NAME}", &default_name),
+    )?;
+    write_new_file(
+        &path.join("tsconfig.json"),
+        include_str!("templates/tsconfig.json"),
+    )?;
+    write_new_file(&path.join(".gitignore"), include_str!("templates/gitignore"))?;
+    write_new_file(&path.join("README.md"), include_str!("templates/README.md"))?;
+
     println!("AstroForge 项目已创建：{path}");
+    println!("下一步：");
+    println!("  cd {path}");
+    println!("  pnpm install");
+    println!("  pnpm exec astroforge build --target vela");
+    println!("  pnpm exec astroforge dev   # 监听源码变更，增量打 rpk");
     Ok(())
 }
 
-fn run_dev(root: &camino::Utf8Path) -> Result<()> {
-    let status = ProcessCommand::new("pnpm")
-        .arg("--dir")
-        .arg(root)
-        .arg("exec")
-        .arg("rsbuild")
-        .arg("dev")
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .with_context(|| format!("启动 Rsbuild dev 失败：{root}"))?;
-    if !status.success() {
-        anyhow::bail!("Rsbuild dev 退出码：{status}");
+/// `astroforge dev` 实现：把 TSX→IR（Rsbuild 插件）与 IR→rpk（Rust 后端）
+/// 拉到同一进程下监听。
+///
+/// 设计：
+/// 1. 默认 spawn `pnpm exec rsbuild dev` 作为子进程，由 `pluginAstroForge`
+///    的 `onBeforeDevCompile` hook 把每次源码变更下沉到 `ir-document.json`。
+/// 2. 主线程立即跑一次完整构建（即使 Rsbuild 还没启动也能产出第一份 rpk）。
+/// 3. 使用 notify-debouncer 监听 IR 文件路径，每次变更后重新跑 Vela 后端 +
+///    打包；500ms 去抖避免 Rsbuild 写文件时的多次触发被重复处理。
+/// 4. `--install` 启用时，每次 rpk 重建完成后调用与 `astroforge install`
+///    同款钩子（`astroforge_device::install`）。
+/// 5. Ctrl-C / 子进程退出时统一清理。
+fn run_dev(root: &camino::Utf8Path, install: bool, no_rsbuild: bool) -> Result<()> {
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+
+    use notify::RecursiveMode;
+    use notify_debouncer_full::new_debouncer;
+
+    let ir_path = root.join("node_modules/.cache/astroforge/ir-document.json");
+    fs::create_dir_all(ir_path.parent().unwrap()).ok();
+
+    let mut rsbuild_child = if no_rsbuild {
+        None
+    } else {
+        let child = ProcessCommand::new("pnpm")
+            .arg("--dir")
+            .arg(root)
+            .arg("exec")
+            .arg("rsbuild")
+            .arg("dev")
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .with_context(|| format!("启动 Rsbuild dev 失败：{root}"))?;
+        Some(child)
+    };
+
+    // 初始构建：若 IR 已存在（Rsbuild 子进程会异步生成），打一份 rpk。否则等
+    // 第一次 IR 文件出现后再触发，避免阻塞死锁。
+    if ir_path.exists() {
+        if let Err(err) = rebuild_once(root, &ir_path, install) {
+            eprintln!("[dev] 初始构建失败：{err:?}");
+        }
+    } else {
+        println!("[dev] 等待 Rsbuild 生成首个 IR：{ir_path}");
+    }
+
+    let (tx, rx) = channel();
+    let mut debouncer = new_debouncer(Duration::from_millis(500), None, tx)
+        .with_context(|| "启动 notify-debouncer 失败")?;
+    let parent = ir_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("IR 缓存目录无父目录"))?
+        .to_owned();
+    debouncer
+        .watch(parent.as_std_path(), RecursiveMode::NonRecursive)
+        .with_context(|| format!("监听 IR 缓存失败：{parent}"))?;
+
+    let result = (|| -> Result<()> {
+        for events in rx {
+            let events = events.map_err(|errors| {
+                anyhow::anyhow!("notify-debouncer 错误：{:?}", errors)
+            })?;
+            if !events.iter().any(|evt| {
+                evt.paths.iter().any(|p| {
+                    p.file_name()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|name| name == "ir-document.json")
+                })
+            }) {
+                continue;
+            }
+            if let Err(err) = rebuild_once(root, &ir_path, install) {
+                eprintln!("[dev] 重建失败：{err:?}");
+            }
+            if let Some(child) = rsbuild_child.as_mut()
+                && let Ok(Some(status)) = child.try_wait()
+            {
+                anyhow::bail!("Rsbuild 子进程退出，dev 终止：{status}");
+            }
+        }
+        Ok(())
+    })();
+
+    if let Some(mut child) = rsbuild_child.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    result
+}
+
+fn rebuild_once(
+    root: &camino::Utf8Path,
+    ir_path: &camino::Utf8Path,
+    install: bool,
+) -> Result<()> {
+    let doc = astroforge_ir::io::load_ir_from_path(ir_path)
+        .with_context(|| format!("加载 IR 失败：{ir_path}"))?;
+    let build = astroforge_vela::build(doc).context("Vela backend 构建失败")?;
+    let out_path = root
+        .join("dist")
+        .join(format!("{}.debug.rpk", build.package));
+    let unpacked = out_path
+        .parent()
+        .unwrap_or_else(|| camino::Utf8Path::new("."))
+        .join("unpacked");
+    let pack_options = astroforge_packager::PackOptions {
+        signing: signing_config_for("debug", root),
+    };
+    let unpacked_files =
+        astroforge_packager::write_unpacked_with(&build, &unpacked, &pack_options)
+            .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
+    let report = astroforge_packager::pack_with(&build, &out_path, &pack_options)
+        .with_context(|| format!("打包 rpk 失败：{out_path}"))?;
+    println!(
+        "[dev] 已更新 {}  (rpk={} 文件, unpacked={} 文件, sig={})",
+        report.out,
+        report.files.len(),
+        unpacked_files.len(),
+        report.signing.source
+    );
+    if install {
+        match astroforge_device::install(&out_path)? {
+            astroforge_device::DeviceAction::Executed { command } => {
+                println!("[dev] install 钩子执行：{command}");
+            }
+            astroforge_device::DeviceAction::Skipped { reason } => {
+                println!("[dev] install 钩子跳过：{reason}");
+            }
+        }
     }
     Ok(())
 }
@@ -280,16 +418,40 @@ fn run_build(
         .parent()
         .unwrap_or_else(|| camino::Utf8Path::new("."))
         .join("unpacked");
-    let unpacked_files = astroforge_packager::write_unpacked(&build, &unpacked)
-        .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
-    let report = astroforge_packager::pack(&build, &out_path)
+
+    // 同一份 SigningConfig 复用到 unpacked 与 rpk，保证两侧来源一致。
+    let pack_options = astroforge_packager::PackOptions {
+        signing: signing_config_for(profile, root),
+    };
+    let unpacked_files =
+        astroforge_packager::write_unpacked_with(&build, &unpacked, &pack_options)
+            .with_context(|| format!("写出 unpacked 目录失败：{unpacked}"))?;
+    let report = astroforge_packager::pack_with(&build, &out_path, &pack_options)
         .with_context(|| format!("打包 rpk 失败：{out_path}"))?;
 
     println!("构建完成：{}", report.out);
     println!("  unpacked: {unpacked}");
     println!("  files:    {}", report.files.len());
     println!("  unpacked files: {}", unpacked_files.len());
+    println!(
+        "  signing: {} (pubkey={}…, RSA-{})",
+        report.signing.source,
+        report.signing.public_key_fingerprint,
+        report.signing.modulus_bits
+    );
     Ok(())
+}
+
+fn signing_config_for(
+    profile: &str,
+    root: &camino::Utf8Path,
+) -> astroforge_packager::SigningConfig {
+    let mut config = match profile {
+        "release" => astroforge_packager::SigningConfig::release(),
+        _ => astroforge_packager::SigningConfig::debug(),
+    };
+    config.project_root = Some(root.to_owned());
+    config
 }
 
 fn run_rsbuild_build(root: &camino::Utf8Path) -> Result<()> {
@@ -403,7 +565,10 @@ fn inspect_ir(path: &camino::Utf8Path, pretty: bool) -> Result<()> {
 
 fn inspect_rpk(path: &camino::Utf8Path) -> Result<()> {
     let info = astroforge_packager::inspect(path)?;
-    println!("RPK 文件: {}", info.path);
+    println!("RPK 文件: {} ({} bytes)", info.path, info.archive_size);
+    if !info.comment_keys.is_empty() {
+        println!("  zip comment keys: {}", info.comment_keys.join(", "));
+    }
     if let Some(manifest) = &info.manifest {
         println!(
             "  package: {}",
@@ -420,6 +585,29 @@ fn inspect_rpk(path: &camino::Utf8Path) -> Result<()> {
                 .unwrap_or("<unknown>")
         );
     }
+
+    println!("签名:");
+    println!("  outer sig block: {}", yes_no(info.signature.outer_present));
+    println!(
+        "  META-INF/CERT:   {} (内层 sig block: {})",
+        yes_no(info.signature.cert_present),
+        yes_no(info.signature.cert_signature_present)
+    );
+    if let Some(algo) = &info.signature.cert_digest_algorithm {
+        println!(
+            "  hash.json:       {} 条摘要 ({})",
+            info.signature.cert_digest_count, algo
+        );
+    } else if info.signature.cert_present {
+        println!("  hash.json:       无法解析");
+    }
+    if let Some(build_txt) = &info.signature.build_txt {
+        println!("  build.txt:");
+        for line in build_txt.lines() {
+            println!("    {line}");
+        }
+    }
+
     println!("文件清单 ({}):", info.files.len());
     for file in info.files {
         println!(
@@ -428,6 +616,10 @@ fn inspect_rpk(path: &camino::Utf8Path) -> Result<()> {
         );
     }
     Ok(())
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
 }
 
 fn write_new_file(path: &camino::Utf8Path, content: &str) -> Result<()> {

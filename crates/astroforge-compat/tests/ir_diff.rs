@@ -126,6 +126,7 @@ fn end_to_end_ir_document_diff_locates_template_change() {
             entry: "pages/index".into(),
             pages: router_pages,
         },
+        source: None,
     };
 
     let make_doc = |text: &str| {

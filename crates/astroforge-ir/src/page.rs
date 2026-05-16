@@ -52,8 +52,22 @@ impl IrDocument {
     }
 }
 
-/// 应用清单。字段命名一比一对齐 Vela 厂商格式，详见
+/// 应用清单。
+///
+/// 字段命名对齐 Vela 厂商 manifest.json 的 camelCase 键，详见
 /// `docs/vela-runtime-abi.md` §8。
+///
+/// IR 中存在两种表示：
+///
+/// - 强类型字段（`package` / `router` / `device_type_list` 等）：供 IR
+///   消费方（Vela 后端、packager、test-compat runner）做派生计算与校验。
+/// - `source`：源 manifest 的原始 JSON 对象，按用户书写顺序保留所有字段，
+///   包括 IR 未显式建模的扩展字段（如 `subpackages`、`widgets`、
+///   `router.params`、`config.*` 厂商扩展）。
+///
+/// 后端在生成 Vela `manifest.json` 时，**优先**以 `source` 作为基础对象按
+/// 源序输出，并仅追加 `minAPILevel`、`packageInfo` 等流水线注入项；只有当
+/// `source` 缺失（如来自旧版前端或单测构造）时才退回按强类型字段重建。
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Manifest {
     pub package: String,
@@ -76,6 +90,14 @@ pub struct Manifest {
     pub config: AppConfig,
 
     pub router: Router,
+
+    /// 源 manifest 的 camelCase 原始 JSON 对象。
+    ///
+    /// 当前端能提供时，必须是一个 JSON object 且至少包含 `package`、`name`、
+    /// `router.entry` 与 `router.pages` 这些 Vela 必需字段；其余字段按用户
+    /// 原顺序保留。后端 / packager 不应原地修改本字段。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

@@ -39,6 +39,7 @@ fn watch_manifest() -> Manifest {
             entry: "pages/index".into(),
             pages: router_pages,
         },
+        source: None,
     }
 }
 

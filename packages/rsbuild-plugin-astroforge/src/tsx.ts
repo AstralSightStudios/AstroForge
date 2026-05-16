@@ -32,6 +32,26 @@ interface PageFunction {
 export interface ExtractPageModuleResult {
   page: Page;
   components: Record<string, Component>;
+  componentImports: ComponentImport[];
+}
+
+/// 模板中可能引用、但定义在其它模块的 PascalCase 组件 import。
+///
+/// 由 `project.ts` 中的 BFS 加载器消费：按 `from` 路径定位源文件，再调用
+/// `extractComponentFromTsx` 提取组件 IR。这一信息也包含在同文件 import
+/// 中——`project.ts` 通过 `localComponentNames` 过滤掉同文件已提取的项。
+export interface ComponentImport {
+  /// 组件在使用方文件中的本地标识符（PascalCase）。
+  localName: string;
+  /// 模板中对应的 kebab-case 标签名。
+  tag: string;
+  /// import 的源标识符，与源码 `from '...'` 完全一致；仅当以 `./` 或 `../`
+  /// 起始时被视为可解析的本地源文件。
+  from: string;
+  /// 命名导入时为导出名（与 `import { Foo as Bar } ...` 的 `Foo` 相同），
+  /// 默认导入时为 `undefined`。下游加载器据此调用
+  /// `extractComponentFromTsx` 的 `exportName` 参数。
+  exportName?: string;
 }
 
 interface ScriptContext {
@@ -80,6 +100,11 @@ export function extractPageModuleFromTsx(
     bindings,
     options.filename,
   );
+  const componentImports = collectComponentImports(
+    ast.program.body,
+    bindings,
+    Object.keys(components),
+  );
   const imports = importsFromTemplate(template, components);
 
   const page = {
@@ -90,7 +115,194 @@ export function extractPageModuleFromTsx(
     style: extractStyleTable(source, ast.program.body, options.filename),
   };
 
-  return { page, components };
+  return { page, components, componentImports };
+}
+
+export interface ExtractComponentOptions {
+  filename?: string;
+  /// 命名导出场景下的标识符；用于在源文件中找到 `export function Foo()` /
+  /// `export const Foo = () => ...` / `export { Foo }`。缺省时按默认导出
+  /// 处理。
+  exportName?: string;
+}
+
+export interface ExtractComponentResult {
+  component: Component;
+  componentImports: ComponentImport[];
+}
+
+/// 提取单个组件 TSX 文件中导出的组件 IR。
+///
+/// 假设：
+/// - 导出是一个 PascalCase 函数（或返回函数的变量）。
+/// - 函数体直接 `return <JSX/>`，与页面级 default export 同型。
+/// - 模板中可继续引用其它本地或跨文件组件；这些会以 [`ComponentImport`]
+///   形式返回给上层 BFS 加载器。
+export function extractComponentFromTsx(
+  source: string,
+  options: ExtractComponentOptions,
+): ExtractComponentResult {
+  const ast = parse(source, {
+    sourceType: "module",
+    plugins: ["typescript", "jsx"],
+  });
+
+  const bindings = collectAstroForgeImports(ast.program.body);
+  const located = locateComponentFunction(
+    ast.program.body,
+    options.exportName,
+    options.filename,
+  );
+
+  const template = templateFromRenderExpression(
+    located.renderExpression,
+    bindings,
+    options.filename,
+  );
+  const componentImports = collectComponentImports(ast.program.body, bindings, []);
+
+  const component: Component = {
+    name: kebabCase(located.localName),
+    template,
+    script: createEmptyScript(),
+    style: extractStyleTable(source, ast.program.body, options.filename),
+  };
+
+  return { component, componentImports };
+}
+
+interface LocatedComponentFunction {
+  localName: string;
+  renderExpression: any;
+}
+
+function locateComponentFunction(
+  body: any[],
+  exportName: string | undefined,
+  filename?: string,
+): LocatedComponentFunction {
+  if (!exportName) {
+    const page = findDefaultPageFunction(body, filename);
+    return {
+      localName: page.node.id?.name ?? defaultExportName(body) ?? "Component",
+      renderExpression: page.renderExpression,
+    };
+  }
+
+  // export function Foo() { ... }
+  // export const Foo = () => ...
+  for (const statement of body) {
+    if (statement.type !== "ExportNamedDeclaration" || !statement.declaration) {
+      continue;
+    }
+    if (
+      statement.declaration.type === "FunctionDeclaration" &&
+      statement.declaration.id?.name === exportName
+    ) {
+      return {
+        localName: exportName,
+        renderExpression: renderExpressionFromFunction(
+          statement.declaration,
+          filename,
+        ),
+      };
+    }
+    if (statement.declaration.type === "VariableDeclaration") {
+      for (const declarator of statement.declaration.declarations) {
+        if (
+          declarator.id.type === "Identifier" &&
+          declarator.id.name === exportName &&
+          declarator.init &&
+          isFunctionLike(unwrapExpression(declarator.init))
+        ) {
+          return {
+            localName: exportName,
+            renderExpression: renderExpressionFromFunction(
+              unwrapExpression(declarator.init),
+              filename,
+            ),
+          };
+        }
+      }
+    }
+  }
+
+  // export { Foo }; 形态：在顶层找同名函数 / 变量再绑定。
+  for (const statement of body) {
+    if (
+      statement.type === "ExportNamedDeclaration" &&
+      !statement.declaration &&
+      statement.specifiers.some(
+        (s: any) => s.exported?.name === exportName,
+      )
+    ) {
+      const local = findTopLevelBinding(body, exportName);
+      if (local && isFunctionLike(local)) {
+        return {
+          localName: exportName,
+          renderExpression: renderExpressionFromFunction(local, filename),
+        };
+      }
+    }
+  }
+
+  throw new Error(
+    `${filename ?? "TSX"}: 未找到名为 ${exportName} 的命名导出函数`,
+  );
+}
+
+function defaultExportName(body: any[]): string | undefined {
+  for (const statement of body) {
+    if (statement.type !== "ExportDefaultDeclaration") continue;
+    const declaration = unwrapExpression(statement.declaration);
+    if (declaration.type === "FunctionDeclaration" && declaration.id?.name) {
+      return declaration.id.name;
+    }
+    if (declaration.type === "Identifier") {
+      return declaration.name;
+    }
+  }
+  return undefined;
+}
+
+/// 扫描模块的 import 声明，提取所有指向相对路径（`./`、`../`）的
+/// PascalCase 命名导入；过滤掉 `@astroforge/core` 内置绑定与同文件已声明
+/// 的组件，避免重复加入 IR.components 表。
+function collectComponentImports(
+  body: any[],
+  builtinBindings: Map<string, string>,
+  localComponentNames: string[],
+): ComponentImport[] {
+  const localTagSet = new Set(localComponentNames);
+  const out: ComponentImport[] = [];
+
+  for (const statement of body) {
+    if (statement.type !== "ImportDeclaration") continue;
+    const source = statement.source.value;
+    if (typeof source !== "string") continue;
+    if (!source.startsWith("./") && !source.startsWith("../")) continue;
+
+    for (const specifier of statement.specifiers) {
+      const localName: string | undefined =
+        specifier.type === "ImportDefaultSpecifier"
+          ? specifier.local.name
+          : specifier.type === "ImportSpecifier"
+            ? specifier.local.name
+            : undefined;
+      if (!localName || !isPascalCase(localName)) continue;
+      if (builtinBindings.has(localName)) continue;
+      const tag = kebabCase(localName);
+      if (localTagSet.has(tag)) continue;
+      const exportName =
+        specifier.type === "ImportSpecifier"
+          ? specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : specifier.imported.value
+          : undefined;
+      out.push({ localName, tag, from: source, exportName });
+    }
+  }
+  return out;
 }
 
 export function extractAppFromTsx(

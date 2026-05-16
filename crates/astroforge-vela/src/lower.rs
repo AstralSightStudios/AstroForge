@@ -254,7 +254,22 @@ pub fn lower_device_manifests(manifest: &Manifest) -> Result<IndexMap<String, St
 }
 
 /// 按官方源 manifest 的字段顺序生成基础对象，不包含任何打包阶段注入字段。
+///
+/// 优先使用 `Manifest::source`：源对象已经携带用户书写的完整字段集与顺序，
+/// 直接克隆即可，不必关心 IR 是否建模了某个字段（如 `subpackages`、
+/// `widgets`、`router.params` 等扩展点）。
+///
+/// 仅当 `source` 缺失（IR 由旧版前端或测试直接构造）时退化为按 typed
+/// 字段重建。该路径仅维持 IR 兼容性，**不**保证字段顺序与源 manifest 完
+/// 全一致。
 fn manifest_base_object(manifest: &Manifest) -> Result<Map<String, Value>> {
+    if let Some(source) = &manifest.source {
+        let object = source
+            .as_object()
+            .context("manifest.source 必须是 JSON 对象")?;
+        return Ok(object.clone());
+    }
+
     let mut root = Map::new();
     root.insert("package".into(), Value::String(manifest.package.clone()));
     root.insert("name".into(), Value::String(manifest.name.clone()));
@@ -374,6 +389,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             },
+            source: None,
         };
 
         let json = manifest_to_vela_json(&manifest).unwrap();
@@ -398,6 +414,76 @@ mod tests {
         let watch = devices.get("watch").unwrap();
         assert!(!watch.contains("\"minAPILevel\""));
         assert!(!watch.contains("\"packageInfo\""));
+    }
+
+    #[test]
+    fn manifest_source_overrides_typed_fields_and_preserves_unknown_keys() {
+        let source = serde_json::json!({
+            "package": "com.example",
+            "name": "example",
+            "versionName": "1.0.0",
+            "versionCode": 1,
+            "minPlatformVersion": 1200,
+            "icon": "/common/logo.png",
+            "deviceTypeList": ["watch"],
+            // 下面是 IR `Manifest` 没有显式建模、但用户可能写在源 manifest
+            // 中的扩展字段，必须原样透传到 Vela manifest.json。
+            "subpackages": [
+                { "name": "extra", "resource": "pages/extra" }
+            ],
+            "router": {
+                "entry": "pages/index",
+                "pages": { "pages/index": { "component": "index" } },
+                "params": { "from": "main" }
+            },
+            "config": {
+                "logLevel": "log",
+                "vendorExtension": { "fingerprint": true }
+            }
+        });
+
+        let manifest = Manifest {
+            package: "com.example".into(),
+            name: "example".into(),
+            version_name: "1.0.0".into(),
+            version_code: 1,
+            min_platform_version: 1200,
+            icon: "/common/logo.png".into(),
+            simulation_version: None,
+            device_type_list: vec!["watch".into()],
+            features: vec![],
+            config: AppConfig::default(),
+            router: Router {
+                entry: "pages/index".into(),
+                pages: [(
+                    "pages/index".into(),
+                    RoutePage {
+                        component: "index".into(),
+                    },
+                )]
+                .into_iter()
+                .collect(),
+            },
+            source: Some(source),
+        };
+
+        let json = manifest_to_vela_json(&manifest).unwrap();
+        assert!(
+            json.contains("\"subpackages\""),
+            "扩展字段 subpackages 应原样透传"
+        );
+        assert!(
+            json.contains("\"params\""),
+            "router.params 等嵌套扩展字段应保留"
+        );
+        assert!(
+            json.contains("\"vendorExtension\""),
+            "config 嵌套扩展字段应保留"
+        );
+        // minAPILevel 仍应追加在末尾。
+        let subpackages_pos = json.find("\"subpackages\"").unwrap();
+        let min_api_pos = json.find("\"minAPILevel\"").unwrap();
+        assert!(min_api_pos > subpackages_pos);
     }
 
     #[test]

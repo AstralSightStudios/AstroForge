@@ -1,0 +1,21 @@
+{
+  "name": "{NAME}",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astroforge build --target vela",
+    "release": "astroforge release --target vela",
+    "dev": "astroforge dev",
+    "inspect": "astroforge inspect rpk dist/*.debug.rpk"
+  },
+  "dependencies": {
+    "@astroforge/core": "*",
+    "@astroforge/rsbuild-plugin": "*"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.0.0",
+    "astroforge": "*",
+    "typescript": "^5.0.0"
+  }
+}
