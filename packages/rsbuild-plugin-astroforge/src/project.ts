@@ -259,12 +259,21 @@ function createIrDocument(
       component: page.component,
     };
   }
+  const entry =
+    typeof manifestInput.router === "object" &&
+    manifestInput.router !== null &&
+    !Array.isArray(manifestInput.router) &&
+    typeof (manifestInput.router as Record<string, JsonValue>).entry ===
+      "string" &&
+    routerPages[(manifestInput.router as Record<string, JsonValue>).entry as string]
+      ? ((manifestInput.router as Record<string, JsonValue>).entry as string)
+      : pages[0].route;
 
   // 强类型字段从输入派生，供 IR 消费方做派生计算与校验。
   // `source` 是用户原始 manifest 对象的浅拷贝（按书写顺序保留所有键），
   // 确保未在 `AstroForgeManifestInput` 中显式建模的字段（如
   // `subpackages`、`widgets`、`router.params`）也能透传至 Vela 产物。
-  const source = manifestSource(manifestInput, pages[0].route, routerPages);
+  const source = manifestSource(manifestInput, entry, routerPages);
 
   const manifest: Manifest = {
     package: manifestInput.package,
@@ -281,7 +290,7 @@ function createIrDocument(
       design_width: manifestInput.config?.designWidth,
     },
     router: {
-      entry: pages[0].route,
+      entry,
       pages: routerPages,
     },
     source,

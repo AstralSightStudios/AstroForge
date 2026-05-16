@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 import type { AssetRef, Component, IrDocument, Node, Page } from "./ir";
 
 export function collectAssets(root: string, document: IrDocument): AssetRef[] {
   const assets = new Map<string, AssetRef>();
   addAsset(root, document.manifest.icon, assets);
+  collectCommonAssets(root, assets);
   for (const page of Object.values(document.pages)) {
     collectPageAssets(root, page, assets);
   }
@@ -13,6 +14,25 @@ export function collectAssets(root: string, document: IrDocument): AssetRef[] {
     collectComponentAssets(root, component, assets);
   }
   return [...assets.values()];
+}
+
+function collectCommonAssets(root: string, assets: Map<string, AssetRef>) {
+  const commonRoot = resolve(root, "src", "common");
+  if (!existsSync(commonRoot)) return;
+  for (const file of walkFiles(commonRoot)) {
+    const rel = relative(resolve(root, "src"), file).split(sep).join("/");
+    addAsset(root, `/${rel}`, assets);
+  }
+}
+
+function walkFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const next = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walkFiles(next));
+    else if (entry.isFile()) out.push(next);
+  }
+  return out;
 }
 
 function collectPageAssets(

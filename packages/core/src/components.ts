@@ -54,6 +54,7 @@ export interface TextProps extends CommonProps {
 export interface ImageProps extends CommonProps {
   src: string;
   alt?: string;
+  onComplete?: EventHandler;
 }
 
 export interface ImageAnimatorProps extends CommonProps {
