@@ -219,6 +219,10 @@ fn wrap_module(handler_name: &str, body: &str) -> String {
       }}
     }}
 
+    function interopDefault(module) {{
+      return module && module.__esModule ? module.default : module;
+    }}
+
     function resolveAiot(global, globalThis, window, runtimeGlobal) {{
       return global && global.aiot ||
         runtimeGlobal && runtimeGlobal.aiot ||
@@ -429,7 +433,7 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
 
         if name == "style" {
             match attr {
-                Attr::Static(value) => opts.push(("style".to_owned(), json_source(value))),
+                Attr::Static(value) => opts.push(("style".to_owned(), style_static_source(value))),
                 Attr::Dynamic(binding) => opts.push((
                     "style".to_owned(),
                     dynamic_function(&format!(
@@ -490,10 +494,23 @@ fn style_object_expr(
                 StyleSlotValue::Static(value) => json_source(value),
                 StyleSlotValue::Dynamic(binding) => scope.binding_expr(binding),
             };
-            (slot.name.clone(), value)
+            (kebab_to_camel(&slot.name), value)
         })
         .collect();
     object_source(entries)
+}
+
+fn style_static_source(value: &Value) -> String {
+    let Some(object) = value.as_object() else {
+        return json_source(value);
+    };
+
+    object_source(
+        object
+            .iter()
+            .map(|(name, value)| (kebab_to_camel(name), json_source(value)))
+            .collect(),
+    )
 }
 
 enum ValueSource {
@@ -540,9 +557,9 @@ fn emit_system_requires(requires: &[SystemRequire]) -> String {
     for (local, modules) in by_local {
         if modules.len() == 1 {
             lines.push(format!(
-                "var {} = $app_require$({});",
+                "var {} = interopDefault($app_require$({}));",
                 local,
-                js_string(modules[0])
+                js_string(&app_module_require_id(modules[0]))
             ));
             continue;
         }
@@ -551,8 +568,8 @@ fn emit_system_requires(requires: &[SystemRequire]) -> String {
         for (idx, module) in modules.iter().enumerate() {
             let temp = format!("__astroforge_{local}_{idx}");
             lines.push(format!(
-                "var {temp} = $app_require$({});",
-                js_string(module)
+                "var {temp} = interopDefault($app_require$({}));",
+                js_string(&app_module_require_id(module))
             ));
             parts.push(temp);
         }
@@ -564,6 +581,17 @@ fn emit_system_requires(requires: &[SystemRequire]) -> String {
     lines.join("\n")
 }
 
+fn app_module_require_id(module: &str) -> String {
+    if ["system.", "service.", "android.", "hap."]
+        .iter()
+        .any(|prefix| module.starts_with(prefix))
+    {
+        format!("@app-module/{module}")
+    } else {
+        module.to_owned()
+    }
+}
+
 fn style_table_source(style_table: &[StyleEntry]) -> String {
     if style_table.is_empty() {
         return "[]".to_owned();
@@ -572,17 +600,11 @@ fn style_table_source(style_table: &[StyleEntry]) -> String {
     let rows = style_table
         .iter()
         .map(|entry| {
-            let selectors = entry
+            let selector_items = entry
                 .selectors
                 .iter()
-                .map(|compound| {
-                    let items = compound
-                        .iter()
-                        .map(|(kind, name)| format!("[{}, {}]", kind, js_string(name)))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!("[{items}]")
-                })
+                .flat_map(|compound| compound.iter())
+                .map(|(kind, name)| format!("[{}, {}]", kind, js_string(name)))
                 .collect::<Vec<_>>()
                 .join(", ");
             let declarations = object_source(
@@ -592,7 +614,7 @@ fn style_table_source(style_table: &[StyleEntry]) -> String {
                     .map(|(name, value)| (name.clone(), js_string(value)))
                     .collect(),
             );
-            format!("[[{}], {}]", selectors, declarations)
+            format!("[[{}], {}]", selector_items, declarations)
         })
         .collect::<Vec<_>>()
         .join(",\n");
@@ -642,6 +664,24 @@ fn js_string(value: &str) -> String {
     serde_json::to_string(value).expect("string serialization")
 }
 
+fn kebab_to_camel(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut upper_next = false;
+    for ch in input.chars() {
+        if ch == '-' {
+            upper_next = true;
+            continue;
+        }
+        if upper_next {
+            out.extend(ch.to_uppercase());
+            upper_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
 fn indent_lines(input: &str, spaces: usize) -> String {
     let indent = " ".repeat(spaces);
     input
@@ -674,7 +714,7 @@ mod tests {
         let mut attrs = IndexMap::new();
         attrs.insert(
             "style".to_owned(),
-            Attr::Static(json!({ "color": "red", "fontSize": 16 })),
+            Attr::Static(json!({ "color": "red", "flex-direction": "column", "fontSize": 16 })),
         );
         let node = Node::Element(Element {
             tag: "div".into(),
@@ -686,8 +726,8 @@ mod tests {
 
         let js = node_expression(&node, &TemplateScope::default()).unwrap();
         assert!(
-            js.contains("style: {\"color\":\"red\",\"fontSize\":16}"),
-            "应原样输出静态 style 对象，实际：{js}"
+            js.contains("style: { color: \"red\", flexDirection: \"column\", fontSize: 16 }"),
+            "静态 style 对象键应转为设备端接收的 camelCase，实际：{js}"
         );
         assert!(
             !js.contains("$translateStyle$"),
@@ -709,7 +749,11 @@ mod tests {
                     }),
                 },
                 StyleSlot {
-                    name: "fontSize".into(),
+                    name: "align-items".into(),
+                    value: StyleSlotValue::Static(json!("center")),
+                },
+                StyleSlot {
+                    name: "font-size".into(),
                     value: StyleSlotValue::Static(json!(16)),
                 },
             ]),
@@ -724,8 +768,27 @@ mod tests {
 
         let js = node_expression(&node, &TemplateScope::default()).unwrap();
         assert!(
-            js.contains("style: function() { return { color: _vm_.theme.color, fontSize: 16 }; }"),
+            js.contains("style: function() { return { color: _vm_.theme.color, alignItems: \"center\", fontSize: 16 }; }"),
             "混合 style 应在模板闭包内组装对象，实际：{js}"
+        );
+    }
+
+    #[test]
+    fn emits_style_table_with_official_selector_shape() {
+        let mut declarations = IndexMap::new();
+        declarations.insert("flexDirection".into(), "column".into());
+        let style = style_table_source(&[StyleEntry {
+            selectors: vec![vec![(0, "container".into())]],
+            declarations,
+        }]);
+
+        assert!(
+            style.contains("[[[0, \"container\"]], { flexDirection: \"column\" }]"),
+            "样式表 selector 不应多包一层数组，实际：{style}"
+        );
+        assert!(
+            !style.contains("[[[[0, \"container\"]]]"),
+            "样式表 selector 多包了一层数组，实际：{style}"
         );
     }
 
@@ -793,7 +856,10 @@ mod tests {
             local: "network",
             module: "system.fetch",
         }]);
-        assert_eq!(js, "var network = $app_require$(\"system.fetch\");");
+        assert_eq!(
+            js,
+            "var network = interopDefault($app_require$(\"@app-module/system.fetch\"));"
+        );
     }
 
     #[test]
@@ -808,8 +874,12 @@ mod tests {
                 module: "system.network",
             },
         ]);
-        assert!(js.contains("var __astroforge_network_0 = $app_require$(\"system.fetch\");"));
-        assert!(js.contains("var __astroforge_network_1 = $app_require$(\"system.network\");"));
+        assert!(js.contains(
+            "var __astroforge_network_0 = interopDefault($app_require$(\"@app-module/system.fetch\"));"
+        ));
+        assert!(js.contains(
+            "var __astroforge_network_1 = interopDefault($app_require$(\"@app-module/system.network\"));"
+        ));
         assert!(js.contains(
             "var network = Object.assign({}, __astroforge_network_0, __astroforge_network_1);"
         ));

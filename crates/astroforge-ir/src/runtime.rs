@@ -147,15 +147,15 @@ pub struct EventHandler {
 /// 样式表中的一行。
 ///
 /// 序列化目标形态为嵌套数组：
-/// `[ [[[selectorKind, name], ...]], { camelCaseProp: "value" } ]`
+/// `[ [[selectorKind, name], ...], { camelCaseProp: "value" } ]`
 /// 本结构保持字段命名，打印阶段压缩为位置敏感数组。
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct StyleEntry {
-    /// 共享同一声明集合的选择器列表。
+    /// 单个样式项的选择器描述。
     ///
-    /// 外层 [`Vec`]：以逗号分隔的多个 compound 选择器；
-    /// 内层 [`Vec`]：单个 compound 选择器中的 simple selector 链；
-    /// 元组 `(u8, String)` 直接落入运行时数组：选择器类型索引 + 名称。
+    /// 外层 [`Vec`] 为兼容早期 IR 保留；Vela 打印阶段会将其中的 simple
+    /// selector 链压平为官方 `selectorArr`。逗号分隔的多个 selector 应在
+    /// 下沉阶段拆成多个 [`StyleEntry`]，不能在单项中多包一层数组。
     pub selectors: Vec<Vec<(u8, String)>>,
 
     /// camelCase 属性名 → 带单位字符串值。

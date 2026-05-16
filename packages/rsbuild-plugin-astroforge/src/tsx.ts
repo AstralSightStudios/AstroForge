@@ -1693,7 +1693,10 @@ function attrFromValue(name: string, value: any, filename?: string): Attr {
   // 的错误信息。
   const staticObject = staticAttrLiteral(expression);
   if (staticObject !== undefined) {
-    return { kind: "static", value: staticObject };
+    return {
+      kind: "static",
+      value: name === "style" ? normalizeStyleLiteral(staticObject) : staticObject,
+    };
   }
 
   if (name === "style") {
@@ -1723,7 +1726,7 @@ function styleObjectAttr(
         `${filename ?? "TSX"}: style 对象暂不支持展开、方法或计算键`,
       );
     }
-    const key = objectPropertyKey(property.key, filename);
+    const key = kebabToCamel(objectPropertyKey(property.key, filename));
     const value = staticAttrLiteral(property.value);
     if (value !== undefined) {
       slots.push({ name: key, value: { kind: "static", value } });
@@ -1738,6 +1741,16 @@ function styleObjectAttr(
     });
   }
   return slots;
+}
+
+function normalizeStyleLiteral(value: JsonValue): JsonValue {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [kebabToCamel(key), item]),
+  ) as JsonValue;
 }
 
 /// 尝试把表达式整体解析为静态 JSON 字面量。
@@ -2016,4 +2029,8 @@ function kebabCase(value: string): string {
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/_/g, "-")
     .toLowerCase();
+}
+
+function kebabToCamel(value: string): string {
+  return value.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
 }

@@ -63,7 +63,7 @@ describe("TSX extraction", () => {
         import { Text, View } from '@astralsight/astroforge-core';
         export default function Page() {
           return (
-            <View style={{ color: 'red', fontSize: 16, padding: -8 }}>
+            <View style={{ color: 'red', 'flex-direction': 'column', fontSize: 16, padding: -8 }}>
               <Text style={{ fontWeight: 'bold' }}>x</Text>
             </View>
           );
@@ -78,7 +78,12 @@ describe("TSX extraction", () => {
         attrs: {
           style: {
             kind: "static",
-            value: { color: "red", fontSize: 16, padding: -8 },
+            value: {
+              color: "red",
+              flexDirection: "column",
+              fontSize: 16,
+              padding: -8,
+            },
           },
         },
       },
@@ -100,7 +105,7 @@ describe("TSX extraction", () => {
         import { View, useState } from '@astralsight/astroforge-core';
         export default function Page() {
           const [theme, setTheme] = useState({ color: 'red' });
-          return <View style={{ color: theme.color, fontSize: 16 }} />;
+          return <View style={{ color: theme.color, 'align-items': 'center', fontSize: 16 }} />;
         }
       `,
       { route: "pages/index" },
@@ -115,6 +120,10 @@ describe("TSX extraction", () => {
             kind: "dynamic",
             value: { path: "theme.color", is_callable: false },
           },
+        },
+        {
+          name: "alignItems",
+          value: { kind: "static", value: "center" },
         },
         { name: "fontSize", value: { kind: "static", value: 16 } },
       ],

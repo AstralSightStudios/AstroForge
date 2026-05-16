@@ -206,6 +206,12 @@ $app_exports$['entry'] = function($app_exports$) {
   因此模块体使用 `module.exports = function($app_exports$) { … }` 而非
   `$app_exports$['entry'] = …`。
 
+脚本中引用的系统桥接模块必须通过宿主 `$app_require$` 读取，模块名使用
+`@app-module/<feature>` 形态。例如 UX `import router from '@system.router'`
+经 `parser/lib/ux/translate/vela/plugins/require.js` 会改写为
+`$app_require$("@app-module/system.router")`；直接 require `"system.router"`
+不会命中设备端桥接。
+
 ### 5.1 VM 数据访问性约定
 
 用户代码可在 `public` / `protected` / `private` 三个桶下声明数据。注入的
@@ -228,7 +234,7 @@ $app_style$ = [
   ...
 ]
 
-selectorDescriptor = [ [ [ <selectorTypeIndex>, <selectorName> ], ... ] ]
+selectorDescriptor = [ [ <selectorTypeIndex>, <selectorName> ], ... ]
 ```
 
 选择器类型索引（取自 `StyleSelectorType.findSelectorIndex`）：
@@ -245,12 +251,13 @@ selectorDescriptor = [ [ [ <selectorTypeIndex>, <selectorName> ], ... ] ]
 
 ```js
 [
-  [[[0, "demo-page"]]],
+  [[0, "demo-page"]],
   { flexDirection: "column", alignItems: "center" }
 ]
 ```
 
 属性名 kebab-case 转换为 camelCase；值保留为带单位字符串（`"32px"`、`"#ffffff"`）。
+逗号分隔的 selector 不共享同一个运行时条目，编译期需要拆成多行并复制声明块。
 跨规则块的样式合并在编译期完成，运行时不再合并。
 
 ## 7. 模板 ABI

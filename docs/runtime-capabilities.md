@@ -56,9 +56,9 @@ import {
 } from "@astralsight/astroforge-core";
 ```
 
-前缀只影响源码侧的导入名。Vela 后端仍按真实模块名生成
-`$app_require$("system.interconnect")`、`$app_require$("system.bluetooth.ble")`
-等产物，不改变厂商 runtime ABI。
+前缀只影响源码侧的导入名。Vela 后端仍按真实 feature 名生成宿主桥接 require，
+例如 `$app_require$("@app-module/system.interconnect")`、
+`$app_require$("@app-module/system.bluetooth.ble")`，不改变厂商 runtime ABI。
 
 ## 编译期校验
 

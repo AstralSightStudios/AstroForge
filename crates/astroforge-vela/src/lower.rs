@@ -322,18 +322,23 @@ fn is_ident_byte(byte: Option<u8>) -> bool {
 }
 
 fn lower_style_table(style: &StyleTable) -> Vec<StyleEntry> {
-    style.rules.iter().map(lower_style_rule).collect()
+    style.rules.iter().flat_map(lower_style_rule).collect()
 }
 
-fn lower_style_rule(rule: &StyleRule) -> StyleEntry {
-    StyleEntry {
-        selectors: rule.selectors.iter().map(lower_selector).collect(),
-        declarations: rule
-            .declarations
-            .iter()
-            .map(|(name, value)| (kebab_to_camel(name), value.clone()))
-            .collect(),
-    }
+fn lower_style_rule(rule: &StyleRule) -> Vec<StyleEntry> {
+    let declarations: IndexMap<String, String> = rule
+        .declarations
+        .iter()
+        .map(|(name, value)| (kebab_to_camel(name), value.clone()))
+        .collect();
+
+    rule.selectors
+        .iter()
+        .map(|selector| StyleEntry {
+            selectors: vec![lower_selector(selector)],
+            declarations: declarations.clone(),
+        })
+        .collect()
 }
 
 fn lower_selector(selector: &Selector) -> Vec<(u8, String)> {
@@ -474,7 +479,9 @@ fn indent_lines(input: &str, spaces: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use astroforge_ir::page::{AppConfig, Feature, RoutePage, Router};
+    use astroforge_ir::page::{
+        AppConfig, Feature, RoutePage, Router, Selector, SelectorKind, StyleRule, StyleTable,
+    };
 
     #[test]
     fn manifest_uses_vela_field_names() {
@@ -679,6 +686,36 @@ mod tests {
                 ("velaBrightness", "system.brightness"),
                 ("velaBluetoothBLE", "system.bluetooth.ble")
             ]
+        );
+    }
+
+    #[test]
+    fn lowers_grouped_style_selectors_as_separate_entries() {
+        let style = StyleTable {
+            rules: vec![StyleRule {
+                selectors: vec![
+                    Selector {
+                        kind: SelectorKind::Class,
+                        name: "card".into(),
+                    },
+                    Selector {
+                        kind: SelectorKind::Id,
+                        name: "primary".into(),
+                    },
+                ],
+                declarations: [("flex-direction".into(), "column".into())]
+                    .into_iter()
+                    .collect(),
+            }],
+        };
+
+        let lowered = lower_style_table(&style);
+        assert_eq!(lowered.len(), 2);
+        assert_eq!(lowered[0].selectors, vec![vec![(0, "card".into())]]);
+        assert_eq!(lowered[1].selectors, vec![vec![(1, "primary".into())]]);
+        assert_eq!(
+            lowered[0].declarations.get("flexDirection"),
+            Some(&"column".to_owned())
         );
     }
 }
