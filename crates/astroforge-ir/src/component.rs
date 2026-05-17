@@ -41,7 +41,7 @@ pub enum Node {
 }
 
 /// 单个元素节点。
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Element {
     pub tag: String,
 
@@ -61,6 +61,16 @@ pub struct Element {
 
     #[serde(default)]
     pub children: Vec<Node>,
+
+    /// JSX 展开属性集合，例如 `<View {...props} />`。
+    /// 在 Vela 后端通过 `Object.assign` 合并到运行时 opts。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spreads: Vec<Binding>,
+
+    /// 动态标签绑定。当 JSX 标签为运行时变量（如 `const Tag = 'div'; <Tag />`）时，
+    /// 此处存放该变量的 binding，Vela 后端在 `__ce__` 第一个参数位置使用动态表达式。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag_binding: Option<Binding>,
 }
 
 /// 属性值。

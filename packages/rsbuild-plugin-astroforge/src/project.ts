@@ -71,6 +71,15 @@ export function compileAstroForgeProject(
       route: page.route,
       filename: page.file,
       loadStyle: loadStyleImport,
+      resolveImport: (specifier, importer) =>
+        resolveComponentImport(root, importer ?? page.file, specifier),
+      loadModule: (path) => {
+        try {
+          return readFileSync(path, "utf8");
+        } catch {
+          return undefined;
+        }
+      },
     });
     document.pages[page.route] = module.page;
     for (const [name, component] of Object.entries(module.components)) {
@@ -113,15 +122,20 @@ function importsFromTemplateAndComponents(
   template: AppModule["lifecycle"][string] extends string
     ? IrDocument["pages"][string]["template"]
     : never,
-  components: Record<string, unknown>,
+  components: IrDocument["components"],
 ): Record<string, string> {
   const imports: Record<string, string> = {};
+  const visited = new Set<string>();
   const visit = (nodes: IrDocument["pages"][string]["template"]) => {
     for (const node of nodes) {
       switch (node.kind) {
         case "element":
           if (node.value.is_component && components[node.value.tag]) {
             imports[node.value.tag] = node.value.tag;
+            if (!visited.has(node.value.tag)) {
+              visited.add(node.value.tag);
+              visit(components[node.value.tag].template);
+            }
           }
           visit(node.value.children);
           break;
@@ -187,10 +201,22 @@ function loadCrossFileComponents(
       filename: resolved,
       exportName: ref.exportName,
       loadStyle: loadStyleImport,
+      resolveImport: (specifier, importer) =>
+        resolveComponentImport(root, importer ?? resolved, specifier),
+      loadModule: (path) => {
+        try {
+          return readFileSync(path, "utf8");
+        } catch {
+          return undefined;
+        }
+      },
     });
     // 用 import 时声明的 kebab 标签作为表内主键，确保 JSX 模板中 `<Card />`
     // 能命中——本地名与默认导出标识符可能不一致（如 `import Foo from './Card'`）。
     components[ref.tag] = { ...result.component, name: ref.tag };
+    for (const [name, comp] of Object.entries(result.components)) {
+      components[name] = comp;
+    }
     for (const nested of result.componentImports) {
       queue.push({ parent: resolved, ref: nested });
     }

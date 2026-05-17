@@ -26,6 +26,8 @@ fn builtin_element_with_static_attr_and_text_child() {
         is_component: false,
         attrs,
         events: IndexMap::new(),
+        spreads: Vec::new(),
+        tag_binding: None,
         children: vec![Node::Text("Hello".into())],
     });
 
@@ -66,6 +68,8 @@ fn custom_component_with_mixed_attrs_and_event() {
         is_component: true,
         attrs,
         events,
+        spreads: Vec::new(),
+        tag_binding: None,
         children: vec![],
     });
 
@@ -138,6 +142,8 @@ fn list_with_key_and_index() {
             is_component: false,
             attrs: IndexMap::new(),
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![Node::Expression(Binding {
                 path: "user.name".into(),
                 expr: None,
@@ -174,6 +180,8 @@ fn nested_element_preserves_children_order() {
             is_component: true,
             attrs,
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![],
         })
     };
@@ -183,6 +191,8 @@ fn nested_element_preserves_children_order() {
         is_component: false,
         attrs: IndexMap::new(),
         events: IndexMap::new(),
+        spreads: Vec::new(),
+        tag_binding: None,
         children: vec![make_card("张伟"), make_card("李娜")],
     });
 

@@ -58,6 +58,8 @@ fn component_node_element_with_event() {
         is_component: false,
         attrs,
         events,
+        spreads: Vec::new(),
+        tag_binding: None,
         children: vec![Node::Text("x".into())],
     }));
 }

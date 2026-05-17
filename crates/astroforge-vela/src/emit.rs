@@ -283,6 +283,21 @@ const APP_RUNTIME_DEFINITIONS: &str = r#"    var __af_g = (function() {
       };
     }
 
+    if (!__af_g.__af_ctx) {
+      __af_g.__af_ctx = {};
+      __af_g.__af_ctx_stack = {};
+      __af_g.__af_ctx_push = function(key, value) {
+        var s = __af_g.__af_ctx_stack;
+        if (!s[key]) s[key] = [];
+        s[key].push(value);
+        __af_g.__af_ctx[key] = value;
+      };
+      __af_g.__af_ctx_pop = function(key) {
+        var s = __af_g.__af_ctx_stack[key];
+        if (s) { s.pop(); __af_g.__af_ctx[key] = s.length ? s[s.length - 1] : undefined; }
+      };
+    }
+
     if (!__af_g.aiot) {
       var __af_host_aiot = (global && global.aiot) ||
         (typeof globalThis === "object" && globalThis && globalThis.aiot) ||
@@ -534,14 +549,34 @@ fn element_expression(element: &Element, scope: &TemplateScope) -> Result<String
         opts.push(("events".to_owned(), format!("{{ {events} }}")));
     }
 
-    let opts = object_source(opts);
+    let opts = if element.spreads.is_empty() {
+        object_source(opts)
+    } else {
+        let base = object_source(opts);
+        let spreads = element
+            .spreads
+            .iter()
+            .map(|b| scope.binding_expr(b))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("Object.assign({{}}, {base}, {spreads})")
+    };
     let children = children_array(&children, scope)?;
-    Ok(element_call(
-        &element.tag,
-        element.is_component,
-        &opts,
-        &children,
-    ))
+    if let Some(tag_binding) = &element.tag_binding {
+        Ok(element_call_expr(
+            &scope.binding_expr(tag_binding),
+            false,
+            &opts,
+            &children,
+        ))
+    } else {
+        Ok(element_call(
+            &element.tag,
+            element.is_component,
+            &opts,
+            &children,
+        ))
+    }
 }
 
 fn event_handler_source(binding: &Binding, scope: &TemplateScope) -> String {
@@ -664,10 +699,14 @@ fn value_source(value: &ValueSource) -> String {
 }
 
 fn element_call(tag: &str, is_component: bool, opts: &str, children: &str) -> String {
+    element_call_expr(&js_string(tag), is_component, opts, children)
+}
+
+fn element_call_expr(tag_expr: &str, is_component: bool, opts: &str, children: &str) -> String {
     let creator = if is_component { "__cc__" } else { "__ce__" };
     format!(
         "aiot.{creator}({tag}, {{ __vm__: _vm_, __opts__: {opts} }}, {children})",
-        tag = js_string(tag),
+        tag = tag_expr,
     )
 }
 
@@ -845,6 +884,8 @@ mod tests {
             is_component: false,
             attrs,
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![],
         });
 
@@ -871,6 +912,8 @@ mod tests {
             is_component: false,
             attrs,
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![],
         });
 
@@ -910,6 +953,8 @@ mod tests {
             is_component: false,
             attrs,
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![],
         });
 
@@ -946,6 +991,8 @@ mod tests {
             is_component: false,
             attrs: IndexMap::new(),
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![Node::Text("Hello".into())],
         });
 
@@ -967,6 +1014,8 @@ mod tests {
             is_component: false,
             attrs,
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![
                 Node::Text("已创建组件：".into()),
                 Node::Expression(Binding {
@@ -1006,6 +1055,8 @@ mod tests {
             is_component: false,
             attrs: IndexMap::new(),
             events,
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![],
         });
 
@@ -1023,6 +1074,8 @@ mod tests {
             is_component: false,
             attrs: IndexMap::new(),
             events: IndexMap::new(),
+            spreads: Vec::new(),
+            tag_binding: None,
             children: vec![Node::Conditional(Conditional {
                 branches: vec![
                     ConditionalBranch {
@@ -1036,6 +1089,8 @@ mod tests {
                             is_component: false,
                             attrs: IndexMap::new(),
                             events: IndexMap::new(),
+                            spreads: Vec::new(),
+                            tag_binding: None,
                             children: vec![Node::Text("Ready".into())],
                         })],
                     },
@@ -1046,6 +1101,8 @@ mod tests {
                             is_component: false,
                             attrs: IndexMap::new(),
                             events: IndexMap::new(),
+                            spreads: Vec::new(),
+                            tag_binding: None,
                             children: vec![Node::Text("Loading".into())],
                         })],
                     },
@@ -1092,5 +1149,53 @@ mod tests {
         assert!(js.contains(
             "var network = Object.assign({}, __astroforge_network_0, __astroforge_network_1);"
         ));
+    }
+
+    #[test]
+    fn emits_spread_attributes_via_object_assign() {
+        let mut attrs = IndexMap::new();
+        attrs.insert("style".to_owned(), Attr::Static(json!({ "color": "red" })));
+        let node = Node::Element(Element {
+            tag: "div".into(),
+            is_component: false,
+            attrs,
+            events: IndexMap::new(),
+            spreads: vec![Binding {
+                path: "props".into(),
+                expr: None,
+                is_callable: false,
+            }],
+            tag_binding: None,
+            children: vec![],
+        });
+
+        let js = node_expression(&node, &TemplateScope::default()).unwrap();
+        assert!(
+            js.contains("Object.assign({}, { style: { color: \"red\" } }, _vm_.props)"),
+            "spread 属性应通过 Object.assign 合并，实际：{js}"
+        );
+    }
+
+    #[test]
+    fn emits_dynamic_tag_via_runtime_expression() {
+        let node = Node::Element(Element {
+            tag: "div".into(),
+            tag_binding: Some(Binding {
+                path: "Tag".into(),
+                expr: None,
+                is_callable: false,
+            }),
+            is_component: false,
+            attrs: IndexMap::new(),
+            events: IndexMap::new(),
+            spreads: Vec::new(),
+            children: vec![Node::Text("Hello".into())],
+        });
+
+        let js = node_expression(&node, &TemplateScope::default()).unwrap();
+        assert!(
+            js.contains("aiot.__ce__(_vm_.Tag"),
+            "动态标签应使用变量表达式作为 __ce__ 第一个参数，实际：{js}"
+        );
     }
 }

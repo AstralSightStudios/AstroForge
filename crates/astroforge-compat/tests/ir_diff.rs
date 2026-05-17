@@ -141,6 +141,8 @@ fn end_to_end_ir_document_diff_locates_template_change() {
                     is_component: false,
                     attrs: IndexMap::new(),
                     events: IndexMap::new(),
+                    spreads: Vec::new(),
+                    tag_binding: None,
                     children: vec![Node::Text(text.into())],
                 })],
                 script: Script::default(),

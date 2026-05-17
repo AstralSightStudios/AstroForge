@@ -863,4 +863,317 @@ describe("TSX extraction", () => {
       onCreate: "async function onCreate() {\n  await boot();\n}",
     });
   });
+
+  it("inlines local function imports into script.methods", () => {
+    const page = extractPageFromTsx(
+      `
+        import { Text, View } from '@astralsight/astroforge-core';
+        import { formatDate } from './utils';
+        export default function Page() {
+          const label = formatDate('2024-01-01');
+          return <View><Text>{label}</Text></View>;
+        }
+      `,
+      {
+        route: "pages/index",
+        filename: "/src/pages/index.tsx",
+        resolveImport(specifier) {
+          if (specifier === "./utils") return "/src/pages/utils.ts";
+          return undefined;
+        },
+        loadModule(path) {
+          if (path === "/src/pages/utils.ts") {
+            return `
+              export function formatDate(d: string) {
+                return d.replace(/-/g, "/");
+              }
+            `;
+          }
+          return undefined;
+        },
+      },
+    );
+
+    expect(page.script.methods.formatDate).toBe(
+      "function formatDate(d) {\n  return d.replace(/-/g, \"/\");\n}",
+    );
+  });
+
+  it("maps props.children to a slot element in component templates", () => {
+    const module = extractPageModuleFromTsx(
+      `
+        import { Text, View } from '@astralsight/astroforge-core';
+        function Card({ title, children }) {
+          return <View><Text>{title}</Text>{children}</View>;
+        }
+        export default function Page() {
+          return <Card title="A"><Text>Hello</Text></Card>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    const card = module.components.card;
+    expect(card.script.props).not.toHaveProperty("children");
+    expect(card.template).toEqual([
+      {
+        kind: "element",
+        value: {
+          tag: "div",
+          is_component: false,
+          attrs: {},
+          events: {},
+          children: [
+            {
+              kind: "element",
+              value: {
+                tag: "text",
+                is_component: false,
+                attrs: {},
+                events: {},
+                children: [
+                  {
+                    kind: "expression",
+                    value: { path: "title", is_callable: false },
+                  },
+                ],
+              },
+            },
+            {
+              kind: "element",
+              value: {
+                tag: "slot",
+                is_component: false,
+                attrs: {},
+                events: {},
+                children: [],
+              },
+            },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it("maps member expression props.children to a slot element", () => {
+    const module = extractPageModuleFromTsx(
+      `
+        import { View } from '@astralsight/astroforge-core';
+        function Card(props) {
+          return <View>{props.children}</View>;
+        }
+        export default function Page() {
+          return <Card><Text>Hello</Text></Card>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    const card = module.components.card;
+    expect(card.template[0].value.children[0]).toEqual({
+      kind: "element",
+      value: {
+        tag: "slot",
+        is_component: false,
+        attrs: {},
+        events: {},
+        children: [],
+      },
+    });
+  });
+
+  it("lowers useReducer into private_data and dispatch method", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useReducer } from '@astralsight/astroforge-core';
+        function counterReducer(state, action) {
+          switch (action.type) {
+            case 'inc': return state + 1;
+            default: return state;
+          }
+        }
+        export default function Page() {
+          const [count, dispatch] = useReducer(counterReducer, 0);
+          return <View onClick={() => dispatch({ type: 'inc' })}>{count}</View>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.private_data).toEqual({ count: 0 });
+    expect(page.script.methods.dispatch).toContain(
+      "this.count = (counterReducer)(this.count, action)",
+    );
+  });
+
+  it("lowers useReducer with init function", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useReducer } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [count, dispatch] = useReducer((s, a) => s + a, 0, () => 10);
+          return <View>{count}</View>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.private_data).toEqual({ count: 10 });
+  });
+
+  it("lowers useId into private_data as stable identifier", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useId } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const id = useId();
+          const id2 = useId();
+          return <View id={id}><View id={id2} /></View>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.private_data).toEqual({
+      id: "__af_id_1",
+      id2: "__af_id_2",
+    });
+  });
+
+  it("inlines local constant imports into script.private_data", () => {
+    const page = extractPageFromTsx(
+      `
+        import { Text, View } from '@astralsight/astroforge-core';
+        import { MAX_SIZE } from './constants';
+        export default function Page() {
+          const label = MAX_SIZE;
+          return <View><Text>{label}</Text></View>;
+        }
+      `,
+      {
+        route: "pages/index",
+        filename: "/src/pages/index.tsx",
+        resolveImport(specifier) {
+          if (specifier === "./constants") return "/src/pages/constants.ts";
+          return undefined;
+        },
+        loadModule(path) {
+          if (path === "/src/pages/constants.ts") {
+            return `export const MAX_SIZE = 128;`;
+          }
+          return undefined;
+        },
+      },
+    );
+
+    expect(page.script.private_data).toEqual({ MAX_SIZE: 128 });
+  });
+
+  it("extracts JSX spread attributes into element spreads", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [props, setProps] = useState({ className: 'card' });
+          return <View {...props} style={{ color: 'red' }} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect((page.template[0] as any).value.spreads).toEqual([
+      { path: "props", is_callable: false },
+    ]);
+    expect((page.template[0] as any).value.attrs.style).toEqual({
+      kind: "static",
+      value: { color: "red" },
+    });
+  });
+
+  it("treats uppercase local variables as dynamic tags", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const Tag = 'text';
+          return <View><Tag className="info">Hello</Tag></View>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    const tagElement = (page.template[0] as any).value.children[0];
+    expect(tagElement.value.tag).toBe("div");
+    expect(tagElement.value.tag_binding).toEqual({
+      path: "Tag",
+      is_callable: false,
+    });
+    expect(tagElement.value.is_component).toBe(false);
+    expect(tagElement.value.attrs.class).toEqual({
+      kind: "static",
+      value: "info",
+    });
+  });
+
+  it("lowers createContext / useContext / Provider into context provider components", () => {
+    const module = extractPageModuleFromTsx(
+      `
+        import { Text, View, createContext, useContext } from '@astralsight/astroforge-core';
+        const ThemeContext = createContext('light');
+        function Button() {
+          const theme = useContext(ThemeContext);
+          return <Text>{theme}</Text>;
+        }
+        export default function Page() {
+          return (
+            <View>
+              <ThemeContext.Provider value="dark">
+                <Button />
+              </ThemeContext.Provider>
+            </View>
+          );
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    const page = module.page;
+    const button = module.components.button;
+    const provider = module.components.__af_ctxp___af_ctx_1;
+
+    expect(button.script.private_data).toEqual({ theme: null });
+    expect(button.script.lifecycle.onInit).toContain(
+      "this.theme = __af_g.__af_ctx['__af_ctx_1'] !== undefined ? __af_g.__af_ctx['__af_ctx_1'] : 'light';",
+    );
+
+    expect(provider.name).toBe("__af_ctxp___af_ctx_1");
+    expect(provider.template[0]).toMatchObject({
+      kind: "element",
+      value: { tag: "slot" },
+    });
+    expect(provider.script.lifecycle.onInit).toContain(
+      "__af_g.__af_ctx_push('__af_ctx_1', this.value);",
+    );
+    expect(provider.script.lifecycle.onDestroy).toContain(
+      "__af_g.__af_ctx_pop('__af_ctx_1');",
+    );
+
+    expect(page.template[0]).toMatchObject({
+      kind: "element",
+      value: {
+        children: [
+          {
+            kind: "element",
+            value: {
+              tag: "__af_ctxp___af_ctx_1",
+              is_component: true,
+              attrs: {
+                value: { kind: "static", value: "dark" },
+              },
+            },
+          },
+        ],
+      },
+    });
+  });
 });

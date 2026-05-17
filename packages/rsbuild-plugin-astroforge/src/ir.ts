@@ -120,6 +120,8 @@ export interface Element {
   attrs: Record<string, Attr>;
   events: Record<string, Binding>;
   children: Node[];
+  spreads?: Binding[];
+  tag_binding?: Binding;
 }
 
 export type Attr =
