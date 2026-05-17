@@ -99,6 +99,7 @@ interface ScriptContext {
   filename?: string;
   stateVars: Set<string>;
   stateSetters: Map<string, string>;
+  memoVars: Map<string, any>;
 }
 
 interface ScriptExtraction {
@@ -153,10 +154,12 @@ export function extractPageModuleFromTsx(
     bindings,
     options.filename,
   );
+  const usedComponentNames = collectUsedJsxComponentNames(ast.program.body);
   const componentImports = collectComponentImports(
     ast.program.body,
     bindings,
     Object.keys(components),
+    usedComponentNames,
   );
   const imports = importsFromTemplate(template, components);
 
@@ -218,23 +221,29 @@ export function extractComponentFromTsx(
     options.filename,
   );
 
-  const script: Script = {
-    ...createEmptyScript(),
-    props: extractComponentProps(
-      located.node,
-      ast.program.body,
-      options.filename,
-    ),
-  };
+  const scriptExtraction = extractScript(
+    source,
+    ast.program.body,
+    located.node,
+    options.filename,
+  );
+  const script = scriptExtraction.script;
+  script.props = extractComponentProps(
+    located.node,
+    ast.program.body,
+    options.filename,
+  );
   const template = templateFromRenderExpression(
     located.renderExpression,
     bindings,
-    createTemplateContext(source, options.filename),
+    createTemplateContext(source, options.filename, scriptExtraction.context),
   );
+  const usedComponentNames = collectUsedJsxComponentNames(ast.program.body);
   const componentImports = collectComponentImports(
     ast.program.body,
     bindings,
     [],
+    usedComponentNames,
   );
 
   const component: Component = {
@@ -349,13 +358,15 @@ function defaultExportName(body: any[]): string | undefined {
   return undefined;
 }
 
-/// 扫描模块的 import 声明，提取所有指向相对路径（`./`、`../`）的
-/// PascalCase 命名导入；过滤掉 `@astralsight/astroforge-core` 内置绑定与同文件已声明
-/// 的组件，避免重复加入 IR.components 表。
+/// 扫描模块的 import 声明，提取实际出现在 JSX 标签里的 PascalCase 组件。
+///
+/// 只看 import 形态会把 `SETTINGS` 这类配置常量误判为组件，进而要求目标模块
+/// 导出同名函数。这里以 JSX 使用点为准，避免静态分析越界到普通数据 import。
 function collectComponentImports(
   body: any[],
   builtinBindings: Map<string, string>,
   localComponentNames: string[],
+  usedComponentNames: Set<string>,
 ): ComponentImport[] {
   const localTagSet = new Set(localComponentNames);
   const out: ComponentImport[] = [];
@@ -364,7 +375,6 @@ function collectComponentImports(
     if (statement.type !== "ImportDeclaration") continue;
     const source = statement.source.value;
     if (typeof source !== "string") continue;
-    if (!source.startsWith("./") && !source.startsWith("../")) continue;
 
     for (const specifier of statement.specifiers) {
       const localName: string | undefined =
@@ -374,6 +384,7 @@ function collectComponentImports(
             ? specifier.local.name
             : undefined;
       if (!localName || !isPascalCase(localName)) continue;
+      if (!usedComponentNames.has(localName)) continue;
       if (builtinBindings.has(localName)) continue;
       const tag = kebabCase(localName);
       if (localTagSet.has(tag)) continue;
@@ -386,6 +397,31 @@ function collectComponentImports(
       out.push({ localName, tag, from: source, exportName });
     }
   }
+  return out;
+}
+
+function collectUsedJsxComponentNames(nodes: any[]): Set<string> {
+  const out = new Set<string>();
+  const visit = (node: any) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const item of node) visit(item);
+      return;
+    }
+
+    if (node.type === "JSXElement") {
+      const name = node.openingElement.name;
+      if (name.type === "JSXIdentifier" && isPascalCase(name.name)) {
+        out.add(name.name);
+      }
+    }
+
+    for (const value of Object.values(node)) {
+      visit(value);
+    }
+  };
+
+  visit(nodes);
   return out;
 }
 
@@ -477,17 +513,19 @@ function extractLocalComponents(
     }
 
     const name = kebabCase(candidate.name);
+    const scriptExtraction = extractScript(source, body, fn, filename, {
+      collectExportedLifecycle: false,
+    });
+    const script = scriptExtraction.script;
+    script.props = extractComponentProps(fn, body, filename);
     components[name] = {
       name,
       template: templateFromRenderExpression(
         renderExpressionFromFunction(fn, filename),
         bindings,
-        createTemplateContext(source, filename),
+        createTemplateContext(source, filename, scriptExtraction.context),
       ),
-      script: {
-        ...createEmptyScript(),
-        props: extractComponentProps(fn, body, filename),
-      },
+      script,
       style: createEmptyStyleTable(),
     };
   }
@@ -819,6 +857,7 @@ function extractScript(
   moduleBody: any[],
   pageFunction: any,
   filename?: string,
+  options: { collectExportedLifecycle?: boolean } = {},
 ): ScriptExtraction {
   const script = createEmptyScript();
   const body = unwrapExpression(pageFunction.body);
@@ -829,13 +868,18 @@ function extractScript(
 
   for (const statement of body.body) {
     collectUseStateDeclaration(script, context, statement);
+    collectUseRefDeclaration(script, context, statement);
+    collectUseMemoDeclaration(context, statement);
   }
 
   for (const statement of body.body) {
     collectMethod(script, context, statement);
+    collectUseCallbackMethod(script, context, statement);
   }
 
-  collectPageLifecycle(script, context, moduleBody);
+  if (options.collectExportedLifecycle ?? true) {
+    collectPageLifecycle(script, context, moduleBody);
+  }
   collectUseEffectCalls(script, context, body.body);
 
   return { script, context };
@@ -847,6 +891,7 @@ function createScriptContext(source: string, filename?: string): ScriptContext {
     filename,
     stateVars: new Set(),
     stateSetters: new Map(),
+    memoVars: new Map(),
   };
 }
 
@@ -911,6 +956,53 @@ function collectUseStateDeclaration(
   }
 }
 
+function collectUseRefDeclaration(
+  script: Script,
+  context: ScriptContext,
+  statement: any,
+) {
+  if (statement.type !== "VariableDeclaration") {
+    return;
+  }
+
+  for (const declarator of statement.declarations) {
+    if (
+      declarator.id.type !== "Identifier" ||
+      !declarator.init ||
+      !isUseRefCall(declarator.init)
+    ) {
+      continue;
+    }
+
+    const initial = declarator.init.arguments[0];
+    script.private_data[declarator.id.name] = {
+      current: initial ? staticJsonValue(initial, context.filename) : null,
+    };
+    context.stateVars.add(declarator.id.name);
+  }
+}
+
+function collectUseMemoDeclaration(context: ScriptContext, statement: any) {
+  if (statement.type !== "VariableDeclaration") {
+    return;
+  }
+
+  for (const declarator of statement.declarations) {
+    if (
+      declarator.id.type !== "Identifier" ||
+      !declarator.init ||
+      !isUseMemoCall(declarator.init)
+    ) {
+      continue;
+    }
+
+    context.memoVars.set(
+      declarator.id.name,
+      memoExpressionFromCall(context, declarator.init),
+    );
+  }
+}
+
 function collectMethod(script: Script, context: ScriptContext, statement: any) {
   if (statement.type === "FunctionDeclaration") {
     if (!statement.id?.name) {
@@ -940,6 +1032,33 @@ function collectMethod(script: Script, context: ScriptContext, statement: any) {
     script.methods[declarator.id.name] = lowerFunctionLike(
       context,
       unwrapExpression(declarator.init),
+      declarator.id.name,
+    );
+  }
+}
+
+function collectUseCallbackMethod(
+  script: Script,
+  context: ScriptContext,
+  statement: any,
+) {
+  if (statement.type !== "VariableDeclaration") {
+    return;
+  }
+
+  for (const declarator of statement.declarations) {
+    if (
+      declarator.id.type !== "Identifier" ||
+      !declarator.init ||
+      !isUseCallbackCall(declarator.init)
+    ) {
+      continue;
+    }
+
+    const callback = callbackFunctionFromCall(context, declarator.init);
+    script.methods[declarator.id.name] = lowerFunctionLike(
+      context,
+      callback,
       declarator.id.name,
     );
   }
@@ -1079,6 +1198,8 @@ function collectLifecycleObject(
     out[key] =
       mode === "function"
         ? lowerFunctionLike(context, fn, key)
+        : fn.async
+          ? lowerFunctionLike(context, fn, key)
         : lowerFunctionBodySource(context, fn.body);
   }
 }
@@ -1144,11 +1265,68 @@ function lifecycleKey(node: any, filename?: string): string {
 }
 
 function isUseStateCall(node: any): boolean {
+  return isHookCall(node, "useState");
+}
+
+function isUseRefCall(node: any): boolean {
+  return isHookCall(node, "useRef");
+}
+
+function isUseMemoCall(node: any): boolean {
+  return isHookCall(node, "useMemo");
+}
+
+function isUseCallbackCall(node: any): boolean {
+  return isHookCall(node, "useCallback");
+}
+
+function isHookCall(node: any, name: string): boolean {
   const expression = unwrapExpression(node);
   return (
     expression.type === "CallExpression" &&
     expression.callee.type === "Identifier" &&
-    expression.callee.name === "useState"
+    expression.callee.name === name
+  );
+}
+
+function memoExpressionFromCall(context: ScriptContext, call: any): any {
+  const factory = unwrapExpression(call.arguments[0]);
+  if (!isFunctionLike(factory)) {
+    throw new Error(`${context.filename ?? "TSX"}: useMemo 参数必须是函数`);
+  }
+  return returnExpressionFromStaticFactory(context, factory, "useMemo");
+}
+
+function callbackFunctionFromCall(context: ScriptContext, call: any): any {
+  const callback = unwrapExpression(call.arguments[0]);
+  if (!isFunctionLike(callback)) {
+    throw new Error(`${context.filename ?? "TSX"}: useCallback 参数必须是函数`);
+  }
+  return callback;
+}
+
+function returnExpressionFromStaticFactory(
+  context: ScriptContext,
+  fn: any,
+  hookName: string,
+): any {
+  const body = unwrapExpression(fn.body);
+  if (body.type !== "BlockStatement") {
+    return body;
+  }
+
+  const meaningful = body.body.filter(
+    (statement: any) => statement.type !== "EmptyStatement",
+  );
+  if (meaningful.length === 1 && meaningful[0].type === "ReturnStatement") {
+    if (!meaningful[0].argument) {
+      throw new Error(`${context.filename ?? "TSX"}: ${hookName} 返回值不能为空`);
+    }
+    return unwrapExpression(meaningful[0].argument);
+  }
+
+  throw new Error(
+    `${context.filename ?? "TSX"}: ${hookName} 函数体只能包含 return 表达式`,
   );
 }
 
@@ -1157,11 +1335,12 @@ function lowerFunctionLike(
   node: any,
   methodName: string,
 ): string {
+  const asyncPrefix = node.async ? "async " : "";
   const params = node.params
     .map((param: any) => lowerParameter(context, param))
     .join(", ");
   const body = lowerFunctionBody(context, node.body);
-  return `function ${methodName}(${params}) ${body}`;
+  return `${asyncPrefix}function ${methodName}(${params}) ${body}`;
 }
 
 function lowerParameter(context: ScriptContext, param: any): string {
@@ -1172,20 +1351,24 @@ function lowerParameter(context: ScriptContext, param: any): string {
     case "RestElement":
       return `...${lowerParameter(context, node.argument)}`;
     case "AssignmentPattern":
-      return `${lowerParameter(context, node.left)} = ${sourceForNode(context.source, node.right)}`;
+      return `${lowerParameter(context, node.left)} = ${lowerExpression(context, node.right)}`;
     default:
       throw new Error(`不支持的方法参数形态：${node.type}`);
   }
 }
 
-function lowerFunctionBody(context: ScriptContext, body: any): string {
+function lowerFunctionBody(
+  context: ScriptContext,
+  body: any,
+  aliases: Map<string, string> = new Map(),
+): string {
   const block = unwrapExpression(body);
   if (block.type !== "BlockStatement") {
-    return `{ return ${lowerExpression(context, block)}; }`;
+    return `{ return ${lowerExpression(context, block, aliases)}; }`;
   }
 
   const statements = block.body
-    .map((statement: any) => lowerStatement(context, statement))
+    .map((statement: any) => lowerStatement(context, statement, aliases))
     .filter(Boolean);
   if (statements.length === 0) {
     return "{}";
@@ -1193,28 +1376,50 @@ function lowerFunctionBody(context: ScriptContext, body: any): string {
   return `{\n${statements.map((statement: string) => `  ${statement}`).join("\n")}\n}`;
 }
 
-function lowerFunctionBodySource(context: ScriptContext, body: any): string {
+function lowerFunctionBodySource(
+  context: ScriptContext,
+  body: any,
+  aliases: Map<string, string> = new Map(),
+): string {
   const block = unwrapExpression(body);
   if (block.type !== "BlockStatement") {
-    return `return ${lowerExpression(context, block)};`;
+    return `return ${lowerExpression(context, block, aliases)};`;
   }
 
   return block.body
-    .map((statement: any) => lowerStatement(context, statement))
+    .map((statement: any) => lowerStatement(context, statement, aliases))
     .filter(Boolean)
     .join("\n");
 }
 
-function lowerStatement(context: ScriptContext, statement: any): string {
+function lowerStatement(
+  context: ScriptContext,
+  statement: any,
+  aliases: Map<string, string> = new Map(),
+): string {
   switch (statement.type) {
     case "ExpressionStatement":
-      return `${lowerExpression(context, statement.expression)};`;
+      return `${lowerExpression(context, statement.expression, aliases)};`;
     case "ReturnStatement":
       return statement.argument
-        ? `return ${lowerExpression(context, statement.argument)};`
+        ? `return ${lowerExpression(context, statement.argument, aliases)};`
         : "return;";
     case "VariableDeclaration":
-      return lowerVariableDeclaration(context, statement);
+      return lowerVariableDeclaration(context, statement, aliases);
+    case "IfStatement":
+      return lowerIfStatement(context, statement, aliases);
+    case "BlockStatement":
+      return lowerBlockStatement(context, statement, aliases);
+    case "ThrowStatement":
+      return statement.argument
+        ? `throw ${lowerExpression(context, statement.argument, aliases)};`
+        : "throw;";
+    case "BreakStatement":
+      return statement.label ? `break ${statement.label.name};` : "break;";
+    case "ContinueStatement":
+      return statement.label
+        ? `continue ${statement.label.name};`
+        : "continue;";
     default:
       return sourceForNode(context.source, statement);
   }
@@ -1223,15 +1428,71 @@ function lowerStatement(context: ScriptContext, statement: any): string {
 function lowerVariableDeclaration(
   context: ScriptContext,
   statement: any,
+  aliases: Map<string, string> = new Map(),
 ): string {
   const declarations = statement.declarations.map((declarator: any) => {
-    const id = sourceForNode(context.source, declarator.id);
+    const id = lowerBindingTarget(context, declarator.id);
     if (!declarator.init) {
       return id;
     }
-    return `${id} = ${lowerExpression(context, declarator.init)}`;
+    return `${id} = ${lowerExpression(context, declarator.init, aliases)}`;
   });
   return `${statement.kind} ${declarations.join(", ")};`;
+}
+
+function lowerBindingTarget(context: ScriptContext, target: any): string {
+  const node = unwrapExpression(target);
+  switch (node.type) {
+    case "Identifier":
+      return node.name;
+    default:
+      return sourceForNode(context.source, node);
+  }
+}
+
+function lowerIfStatement(
+  context: ScriptContext,
+  statement: any,
+  aliases: Map<string, string>,
+): string {
+  const test = lowerExpression(context, statement.test, aliases);
+  const consequent = lowerStatementAsBlock(
+    context,
+    statement.consequent,
+    aliases,
+  );
+  if (!statement.alternate) {
+    return `if (${test}) ${consequent}`;
+  }
+  const alternate =
+    statement.alternate.type === "IfStatement"
+      ? lowerIfStatement(context, statement.alternate, aliases)
+      : lowerStatementAsBlock(context, statement.alternate, aliases);
+  return `if (${test}) ${consequent} else ${alternate}`;
+}
+
+function lowerBlockStatement(
+  context: ScriptContext,
+  statement: any,
+  aliases: Map<string, string>,
+): string {
+  const body = statement.body
+    .map((item: any) => lowerStatement(context, item, aliases))
+    .filter(Boolean)
+    .map((item: string) => `  ${item}`)
+    .join("\n");
+  return body ? `{\n${body}\n}` : "{}";
+}
+
+function lowerStatementAsBlock(
+  context: ScriptContext,
+  statement: any,
+  aliases: Map<string, string>,
+): string {
+  if (statement.type === "BlockStatement") {
+    return lowerBlockStatement(context, statement, aliases);
+  }
+  return `{\n  ${lowerStatement(context, statement, aliases)}\n}`;
 }
 
 function expressionPrecedence(expression: any): number {
@@ -1254,6 +1515,8 @@ function expressionPrecedence(expression: any): number {
       return 18;
     case "UpdateExpression":
       return 17;
+    case "AwaitExpression":
+      return 16;
     case "UnaryExpression":
       return 16;
     case "BinaryExpression":
@@ -1338,13 +1601,19 @@ function lowerExpression(
     case "Identifier": {
       const alias = aliases.get(node.name);
       if (alias) {
-        return `this.${alias}`;
+        return alias;
+      }
+      const memo = scriptMemoExpression(context, node.name, aliases);
+      if (memo) {
+        return memo;
       }
       if (context.stateVars.has(node.name)) {
         return `this.${node.name}`;
       }
       return node.name;
     }
+    case "ThisExpression":
+      return "this";
     case "StringLiteral":
       return JSON.stringify(node.value);
     case "NumericLiteral":
@@ -1353,6 +1622,10 @@ function lowerExpression(
       return String(node.value);
     case "NullLiteral":
       return "null";
+    case "TemplateLiteral":
+      return lowerScriptTemplateLiteral(context, node, aliases);
+    case "ConditionalExpression":
+      return `${lowerExpression(context, node.test, aliases)} ? ${lowerExpression(context, node.consequent, aliases)} : ${lowerExpression(context, node.alternate, aliases)}`;
     case "BinaryExpression":
     case "LogicalExpression": {
       const precedence = expressionPrecedence(node);
@@ -1368,9 +1641,13 @@ function lowerExpression(
         ? `${node.operator}${argument}`
         : `${argument}${node.operator}`;
     }
+    case "AwaitExpression":
+      return `await ${lowerExpressionOperand(context, node.argument, aliases, expressionPrecedence(node), "operand")}`;
     case "MemberExpression":
+    case "OptionalMemberExpression":
       return lowerMemberExpression(context, node, aliases);
-    case "CallExpression": {
+    case "CallExpression":
+    case "OptionalCallExpression": {
       const setterTarget =
         node.callee.type === "Identifier"
           ? context.stateSetters.get(node.callee.name)
@@ -1379,6 +1656,7 @@ function lowerExpression(
         return lowerStateSetterCall(context, setterTarget, node);
       }
 
+      const optional = node.optional ? "?." : "";
       const callee = lowerExpression(context, node.callee, aliases);
       const args = node.arguments
         .map((arg: any) => {
@@ -1388,13 +1666,36 @@ function lowerExpression(
           return lowerExpression(context, arg, aliases);
         })
         .join(", ");
-      return `${callee}(${args})`;
+      return `${callee}${optional}(${args})`;
     }
+    case "ArrayExpression":
+      return `[${node.elements
+        .map((item: any) =>
+          item
+            ? item.type === "SpreadElement"
+              ? `...${lowerExpression(context, item.argument, aliases)}`
+              : lowerExpression(context, item, aliases)
+            : "",
+        )
+        .join(", ")}]`;
+    case "ObjectExpression":
+      return lowerScriptObjectExpression(context, node, aliases);
     case "ArrowFunctionExpression":
-      return sourceForNode(context.source, node);
+    case "FunctionExpression":
+      return lowerFunctionExpression(context, node, aliases);
     default:
       return sourceForNode(context.source, node);
   }
+}
+
+function scriptMemoExpression(
+  context: ScriptContext,
+  name: string,
+  aliases: Map<string, string>,
+): string | undefined {
+  const expression = context.memoVars.get(name);
+  if (!expression) return undefined;
+  return `(${lowerExpression(context, expression, aliases)})`;
 }
 
 function lowerMemberExpression(
@@ -1402,6 +1703,14 @@ function lowerMemberExpression(
   node: any,
   aliases: Map<string, string>,
 ): string {
+  const objectNode = unwrapExpression(node.object);
+  if (objectNode.type === "Identifier" && objectNode.name === "props") {
+    if (node.computed) {
+      return `this[${lowerExpression(context, node.property, aliases)}]`;
+    }
+    return `this.${sourceForNode(context.source, node.property)}`;
+  }
+
   const object = lowerExpressionOperand(
     context,
     node.object,
@@ -1412,7 +1721,86 @@ function lowerMemberExpression(
   if (node.computed) {
     return `${object}[${lowerExpression(context, node.property, aliases)}]`;
   }
-  return `${object}.${sourceForNode(context.source, node.property)}`;
+  const operator = node.optional ? "?." : ".";
+  return `${object}${operator}${sourceForNode(context.source, node.property)}`;
+}
+
+function lowerFunctionExpression(
+  context: ScriptContext,
+  node: any,
+  aliases: Map<string, string>,
+): string {
+  const asyncPrefix = node.async ? "async " : "";
+  const params = node.params
+    .map((param: any) => lowerParameter(context, param))
+    .join(", ");
+  const bodyAliases = withoutParamAliases(aliases, node.params);
+  const body = lowerFunctionBody(context, node.body, bodyAliases);
+  if (node.type === "ArrowFunctionExpression") {
+    return `${asyncPrefix}(${params}) => ${body}`;
+  }
+  const name = node.id?.name ? ` ${node.id.name}` : "";
+  return `${asyncPrefix}function${name}(${params}) ${body}`;
+}
+
+function withoutParamAliases(
+  aliases: Map<string, string>,
+  params: any[],
+): Map<string, string> {
+  if (aliases.size === 0) return aliases;
+  const next = new Map(aliases);
+  for (const param of params) {
+    const node = unwrapExpression(param);
+    if (node.type === "Identifier") {
+      next.delete(node.name);
+    }
+  }
+  return next;
+}
+
+function lowerScriptTemplateLiteral(
+  context: ScriptContext,
+  node: any,
+  aliases: Map<string, string>,
+): string {
+  const parts: string[] = [];
+  node.quasis.forEach((quasi: any, index: number) => {
+    const text = quasi.value.cooked ?? quasi.value.raw ?? "";
+    if (text) {
+      parts.push(JSON.stringify(text));
+    }
+    const expression = node.expressions[index];
+    if (expression) {
+      parts.push(`(${lowerExpression(context, expression, aliases)})`);
+    }
+  });
+  return parts.length > 0 ? parts.join(" + ") : '""';
+}
+
+function lowerScriptObjectExpression(
+  context: ScriptContext,
+  node: any,
+  aliases: Map<string, string>,
+): string {
+  const entries = node.properties.map((property: any) => {
+    if (property.type === "SpreadElement") {
+      return `...${lowerExpression(context, property.argument, aliases)}`;
+    }
+    if (property.type === "ObjectMethod") {
+      const key = property.computed
+        ? `[${lowerExpression(context, property.key, aliases)}]`
+        : jsObjectKey(objectPropertyKey(property.key, context.filename));
+      return `${key}: ${lowerFunctionExpression(context, property, aliases)}`;
+    }
+    if (property.type !== "ObjectProperty") {
+      throw new Error(`${context.filename ?? "TSX"}: 表达式暂不支持对象属性 ${property.type}`);
+    }
+    const key = property.computed
+      ? `[${lowerExpression(context, property.key, aliases)}]`
+      : jsObjectKey(objectPropertyKey(property.key, context.filename));
+    return `${key}: ${lowerExpression(context, property.value, aliases)}`;
+  });
+  return `{ ${entries.join(", ")} }`;
 }
 
 function lowerStateSetterCall(
@@ -1430,7 +1818,7 @@ function lowerStateSetterCall(
     const aliases = new Map<string, string>();
     const firstParam = expression.params[0];
     if (firstParam?.type === "Identifier") {
-      aliases.set(firstParam.name, stateName);
+      aliases.set(firstParam.name, `this.${stateName}`);
     }
     if (expression.body.type === "BlockStatement") {
       throw new Error(
@@ -1511,13 +1899,26 @@ function lowerTemplateVariableDeclaration(
   statement: any,
 ): string {
   const declarations = statement.declarations.map((declarator: any) => {
-    const id = sourceForNode(context.source, declarator.id);
+    const id = lowerTemplateBindingTarget(context, declarator.id);
     if (!declarator.init) {
       return id;
     }
     return `${id} = ${lowerTemplateExpression(context, declarator.init)}`;
   });
   return `${statement.kind} ${declarations.join(", ")};`;
+}
+
+function lowerTemplateBindingTarget(
+  context: TemplateContext,
+  target: any,
+): string {
+  const node = unwrapExpression(target);
+  switch (node.type) {
+    case "Identifier":
+      return node.name;
+    default:
+      return sourceForNode(context.source, node);
+  }
 }
 
 function lowerTemplateIfStatement(
@@ -1568,8 +1969,13 @@ function lowerTemplateExpression(
   const node = unwrapExpression(expression);
 
   switch (node.type) {
-    case "Identifier":
+    case "Identifier": {
+      const memo = templateMemoExpression(context, node.name);
+      if (memo) {
+        return memo;
+      }
       return lowerTemplateIdentifier(context, node.name);
+    }
     case "StringLiteral":
       return JSON.stringify(node.value);
     case "NumericLiteral":
@@ -1623,6 +2029,15 @@ function lowerTemplateExpression(
         `${context.filename ?? "TSX"}: 文本绑定暂不支持 ${node.type}`,
       );
   }
+}
+
+function templateMemoExpression(
+  context: TemplateContext,
+  name: string,
+): string | undefined {
+  const expression = context.scriptContext.memoVars.get(name);
+  if (!expression) return undefined;
+  return `(${lowerTemplateExpression(context, expression)})`;
 }
 
 function lowerTemplateIdentifier(
@@ -2411,6 +2826,14 @@ function bindingFromExpression(
     };
   }
 
+  if (referencesMemoVar(node, context.scriptContext.memoVars)) {
+    return {
+      path: sourceForNode(context.source, node),
+      expr: lowerTemplateExpression(context, node),
+      is_callable: callable,
+    };
+  }
+
   const path = bindingPath(expression);
   if (path) {
     return { path, is_callable: callable };
@@ -2421,6 +2844,23 @@ function bindingFromExpression(
     expr: lowerTemplateExpression(context, node),
     is_callable: callable,
   };
+}
+
+function referencesMemoVar(node: any, memoVars: Map<string, any>): boolean {
+  const current = unwrapExpression(node);
+  if (current.type === "Identifier" && memoVars.has(current.name)) {
+    return true;
+  }
+  if (!current || typeof current !== "object") {
+    return false;
+  }
+  if (Array.isArray(current)) {
+    return current.some((item) => referencesMemoVar(item, memoVars));
+  }
+  return Object.values(current).some((value) => {
+    if (!value || typeof value !== "object") return false;
+    return referencesMemoVar(value, memoVars);
+  });
 }
 
 function bindingPath(expression: any): string | undefined {

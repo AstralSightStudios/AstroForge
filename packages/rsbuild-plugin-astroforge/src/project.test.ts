@@ -632,6 +632,77 @@ export function Badge() {
     });
   });
 
+  it("loads aliased stateful components without treating constants as components", () => {
+    const tmpRoot = mkdtempSync(join(tmpdir(), "astroforge-aliased-component-"));
+    const srcRoot = join(tmpRoot, "src");
+    mkdirSync(join(srcRoot, "pages/index"), { recursive: true });
+    mkdirSync(join(srcRoot, "features/entry"), { recursive: true });
+    mkdirSync(join(srcRoot, "common"), { recursive: true });
+
+    writeFileSync(
+      join(srcRoot, "pages/index/index.tsx"),
+      `import { View } from "@astralsight/astroforge-core";
+import SplashPage from "@features/entry/SplashPage";
+import { SETTINGS } from "../../settings";
+
+export default function IndexPage() {
+  console.log(SETTINGS.title);
+  return <View><SplashPage /></View>;
+}
+`,
+    );
+    writeFileSync(
+      join(srcRoot, "features/entry/SplashPage.tsx"),
+      `import { Text, useEffect, useState } from "@astralsight/astroforge-core";
+
+export default function SplashPage() {
+  const [count, setCount] = useState(1);
+  useEffect(() => {
+    setCount((prev) => prev + 1);
+  }, []);
+  return <Text>{count}</Text>;
+}
+`,
+    );
+    writeFileSync(
+      join(srcRoot, "settings.ts"),
+      `export const SETTINGS = { title: "AstroForge" };
+`,
+    );
+    writeFileSync(
+      join(tmpRoot, "astroforge.config.ts"),
+      `export default {
+  manifest: {
+    package: "com.example.alias",
+    name: "alias",
+    versionName: "0.0.0",
+    versionCode: 1,
+    minPlatformVersion: 1200,
+    icon: "/common/logo.png",
+    deviceTypeList: ["watch"],
+  },
+};
+`,
+    );
+    writeFileSync(join(srcRoot, "common/logo.png"), Buffer.alloc(0));
+
+    const { document } = compileAstroForgeProject({
+      root: tmpRoot,
+      outFile: join(tmpRoot, "ir-document.json"),
+    });
+
+    expect(Object.keys(document.components)).toEqual(["splash-page"]);
+    expect(document.components["splash-page"].script.private_data).toEqual({
+      count: 1,
+    });
+    expect(document.components["splash-page"].script.lifecycle.onReady).toBe(
+      "function onReady() {\n  this.count = this.count + 1;\n}",
+    );
+    expect(document.pages["pages/index"].imports).toEqual({
+      "splash-page": "splash-page",
+    });
+  });
+
   it("loads relative CSS imports into page style", () => {
     const tmpRoot = mkdtempSync(join(tmpdir(), "astroforge-css-import-"));
     const srcRoot = join(tmpRoot, "src");

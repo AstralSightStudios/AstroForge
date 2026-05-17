@@ -122,9 +122,18 @@ fn app_script_object(app: &AppModule) -> String {
 
     let mut entries = Vec::new();
     for (name, body) in &app.lifecycle {
-        entries.push(format!("{name}: function {name}() {{\n{body}\n}}"));
+        if is_function_source(body) {
+            entries.push(format!("{name}: {body}"));
+        } else {
+            entries.push(format!("{name}: function {name}() {{\n{body}\n}}"));
+        }
     }
     format!("{{\n{}\n}}", indent_lines(&entries.join(",\n"), 2))
+}
+
+fn is_function_source(source: &str) -> bool {
+    let trimmed = source.trim_start();
+    trimmed.starts_with("function ") || trimmed.starts_with("async function ")
 }
 
 fn script_object(script: &Script) -> String {
@@ -739,6 +748,22 @@ mod tests {
         let subpackages_pos = json.find("\"subpackages\"").unwrap();
         let min_api_pos = json.find("\"minAPILevel\"").unwrap();
         assert!(min_api_pos > subpackages_pos);
+    }
+
+    #[test]
+    fn app_script_object_preserves_full_async_lifecycle_function() {
+        let app = AppModule {
+            lifecycle: [(
+                "onCreate".into(),
+                "async function onCreate() {\n  await boot();\n}".into(),
+            )]
+            .into_iter()
+            .collect(),
+        };
+
+        let script = app_script_object(&app);
+        assert!(script.contains("onCreate: async function onCreate()"));
+        assert!(!script.contains("function onCreate() {\nasync function"));
     }
 
     #[test]

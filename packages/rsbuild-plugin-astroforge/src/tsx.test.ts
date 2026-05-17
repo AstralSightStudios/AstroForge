@@ -593,6 +593,101 @@ describe("TSX extraction", () => {
     });
   });
 
+  it("lowers timer closures and TypeScript locals inside useEffect", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useEffect, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [count, setCount] = useState(3);
+          useEffect(() => {
+            let stepInterval: any = null;
+            stepInterval = setInterval(() => setCount((prev) => prev - 1), 16);
+            return () => {
+              clearInterval(stepInterval);
+            };
+          }, []);
+          return <View />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.lifecycle.onReady).toContain(
+      "let stepInterval = null;",
+    );
+    expect(page.script.lifecycle.onReady).toContain(
+      "this.count = this.count - 1",
+    );
+    expect(page.script.lifecycle.onReady).not.toContain("setCount");
+  });
+
+  it("extracts useRef and useCallback into component VM script", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useCallback, useRef } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const timer = useRef<any>(null);
+          const stop = useCallback(() => {
+            clearInterval(timer.current);
+            timer.current = null;
+          }, []);
+          return <View onClick={stop} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.private_data).toEqual({ timer: { current: null } });
+    expect(page.script.methods.stop).toBe(
+      "function stop() {\n  clearInterval(this.timer.current);\n  this.timer.current = null;\n}",
+    );
+  });
+
+  it("inlines useMemo expressions in template bindings", () => {
+    const page = extractPageFromTsx(
+      `
+        import { Text, View, useMemo, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [count, setCount] = useState(2);
+          const label = useMemo(() => \`count:\${count}\`, [count]);
+          return <View><Text>{label}</Text></View>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    const text = (page.template[0] as any).value.children[0].value.children[0];
+    expect(text).toEqual({
+      kind: "expression",
+      value: {
+        path: "label",
+        expr: '("count:" + (_vm_.count))',
+        is_callable: false,
+      },
+    });
+  });
+
+  it("preserves async lifecycle functions", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View } from '@astralsight/astroforge-core';
+        export const lifecycle = {
+          async onCreate() {
+            await loadProfile();
+          },
+        };
+        export default function Page() {
+          return <View />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.lifecycle.onCreate).toBe(
+      "async function onCreate() {\n  await loadProfile();\n}",
+    );
+  });
+
   it("infers component props from TypeScript annotations", () => {
     const module = extractPageModuleFromTsx(
       `
@@ -681,6 +776,20 @@ describe("TSX extraction", () => {
     expect(app.lifecycle).toEqual({
       onCreate: 'console.log("app created");',
       onDestroy: 'console.log("app destroyed");',
+    });
+  });
+
+  it("preserves async app lifecycle functions", () => {
+    const app = extractAppFromTsx(`
+      export default {
+        async onCreate() {
+          await boot();
+        },
+      };
+    `);
+
+    expect(app.lifecycle).toEqual({
+      onCreate: "async function onCreate() {\n  await boot();\n}",
     });
   });
 });

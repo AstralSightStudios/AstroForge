@@ -77,6 +77,7 @@ export function compileAstroForgeProject(
       document.components[name] = component;
     }
     loadCrossFileComponents(
+      root,
       document.components,
       visitedFiles,
       page.file,
@@ -153,17 +154,18 @@ function extractAppModule(root: string): AppModule {
 
 const COMPONENT_RESOLUTION_EXTENSIONS = [".tsx", ".ts", ".jsx", ""];
 
-/// BFS 加载页面 TSX 中引用到的相对路径组件 import。
+/// BFS 加载页面 TSX 中引用到的跨文件组件 import。
 ///
 /// 遵循的规则：
-/// - 仅解析 `./` / `../` 起头的源说明符；裸名 import（如
-///   `@astralsight/astroforge-core`、`some-lib`）不在此处处理。
+/// - 解析相对路径，以及常见源码别名 `@/foo`、`@features/foo` →
+///   `src/foo` / `src/features/foo`。裸名包 import 找不到本地文件时会跳过。
 /// - 解析顺序：`.tsx` → `.ts` → `.jsx` → 无后缀（已带后缀）→ 目录下
-///   `index.tsx` / `index.ts`。这与 TypeScript bundler 默认行为一致。
+///   `index.tsx` / `index.ts` / `index.jsx`。这与 TypeScript bundler 默认行为一致。
 /// - 已加载过的文件在 `visitedFiles` 中标记，避免循环依赖死循环。
 /// - 已存在于 `components` 表中的 kebab 标签直接跳过，避免重复覆盖。
 /// - 递归加载该组件内部 import 的其它组件，保证整个组件树都进入 IR。
 function loadCrossFileComponents(
+  root: string,
   components: Record<string, IrDocument["components"][string]>,
   visitedFiles: Set<string>,
   parentFile: string,
@@ -175,7 +177,7 @@ function loadCrossFileComponents(
   while (queue.length > 0) {
     const { parent, ref } = queue.shift()!;
     if (components[ref.tag]) continue;
-    const resolved = resolveComponentImport(parent, ref.from);
+    const resolved = resolveComponentImport(root, parent, ref.from);
     if (!resolved) continue;
     if (visitedFiles.has(resolved)) continue;
     visitedFiles.add(resolved);
@@ -209,19 +211,38 @@ function loadStyleImport(
 }
 
 function resolveComponentImport(
+  root: string,
   parent: string,
   spec: string,
 ): string | undefined {
-  const base = resolve(dirname(parent), spec);
-  for (const ext of COMPONENT_RESOLUTION_EXTENSIONS) {
-    const candidate = `${base}${ext}`;
-    if (existsSync(candidate)) return candidate;
-  }
-  for (const ext of [".tsx", ".ts", ".jsx"]) {
-    const candidate = join(base, `index${ext}`);
-    if (existsSync(candidate)) return candidate;
+  for (const base of componentImportBases(root, parent, spec)) {
+    for (const ext of COMPONENT_RESOLUTION_EXTENSIONS) {
+      const candidate = `${base}${ext}`;
+      if (existsSync(candidate)) return candidate;
+    }
+    for (const ext of [".tsx", ".ts", ".jsx"]) {
+      const candidate = join(base, `index${ext}`);
+      if (existsSync(candidate)) return candidate;
+    }
   }
   return undefined;
+}
+
+function componentImportBases(
+  root: string,
+  parent: string,
+  spec: string,
+): string[] {
+  if (spec.startsWith("./") || spec.startsWith("../")) {
+    return [resolve(dirname(parent), spec)];
+  }
+  if (spec.startsWith("@/")) {
+    return [resolve(root, "src", spec.slice(2))];
+  }
+  if (spec.startsWith("@") && spec.includes("/")) {
+    return [resolve(root, "src", spec.slice(1))];
+  }
+  return [];
 }
 
 export function discoverPages(root: string): PageModule[] {
