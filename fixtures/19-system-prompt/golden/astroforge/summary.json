@@ -1,0 +1,72 @@
+{
+  "files": [
+    "META-INF/CERT",
+    "META-INF/build.txt",
+    "app.js",
+    "common/logo.png",
+    "manifest-watch.json",
+    "manifest.json",
+    "pages/index/index.js"
+  ],
+  "manifest": {
+    "package": "com.astroforge.fixture.prompt",
+    "name": "fixture-19-system-prompt",
+    "versionName": "1.0.0",
+    "versionCode": 1,
+    "minPlatformVersion": 1200,
+    "icon": "/common/logo.png",
+    "deviceTypeList": [
+      "watch"
+    ],
+    "features": [
+      {
+        "name": "system.prompt"
+      }
+    ],
+    "config": {
+      "logLevel": "log",
+      "designWidth": "device-width"
+    },
+    "simulationVersion": "default",
+    "router": {
+      "entry": "pages/index",
+      "pages": {
+        "pages/index": {
+          "component": "index"
+        }
+      }
+    },
+    "minAPILevel": 1
+  },
+  "runtime_calls": [
+    {
+      "file": "app.js",
+      "calls": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "calls": [
+        {
+          "offset": 1139,
+          "callee": "__ce__"
+        },
+        {
+          "offset": 1284,
+          "callee": "__ce__"
+        }
+      ]
+    }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": [
+        "system.prompt"
+      ]
+    }
+  ]
+}

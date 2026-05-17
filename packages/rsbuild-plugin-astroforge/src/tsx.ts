@@ -1234,6 +1234,99 @@ function lowerVariableDeclaration(
   return `${statement.kind} ${declarations.join(", ")};`;
 }
 
+function expressionPrecedence(expression: any): number {
+  const node = unwrapExpression(expression);
+  switch (node.type) {
+    case "Identifier":
+    case "StringLiteral":
+    case "NumericLiteral":
+    case "BooleanLiteral":
+    case "NullLiteral":
+    case "TemplateLiteral":
+    case "ArrayExpression":
+    case "ObjectExpression":
+      return 20;
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return 19;
+    case "CallExpression":
+    case "OptionalCallExpression":
+      return 18;
+    case "UpdateExpression":
+      return 17;
+    case "UnaryExpression":
+      return 16;
+    case "BinaryExpression":
+      return binaryOperatorPrecedence(node.operator);
+    case "LogicalExpression":
+      return logicalOperatorPrecedence(node.operator);
+    case "ConditionalExpression":
+      return 4;
+    case "AssignmentExpression":
+      return 3;
+    default:
+      return 20;
+  }
+}
+
+function binaryOperatorPrecedence(operator: string): number {
+  if (operator === "*" || operator === "/" || operator === "%") return 14;
+  if (operator === "+" || operator === "-") return 13;
+  if (operator === "<<" || operator === ">>" || operator === ">>>") return 12;
+  if (
+    operator === "<" ||
+    operator === "<=" ||
+    operator === ">" ||
+    operator === ">=" ||
+    operator === "in" ||
+    operator === "instanceof"
+  ) {
+    return 11;
+  }
+  if (
+    operator === "==" ||
+    operator === "!=" ||
+    operator === "===" ||
+    operator === "!=="
+  ) {
+    return 10;
+  }
+  if (operator === "&") return 9;
+  if (operator === "^") return 8;
+  if (operator === "|") return 7;
+  return 13;
+}
+
+function logicalOperatorPrecedence(operator: string): number {
+  if (operator === "&&") return 6;
+  if (operator === "||" || operator === "??") return 5;
+  return 5;
+}
+
+function needsExpressionParens(
+  expression: any,
+  parentPrecedence: number,
+  side: "left" | "right" | "operand",
+): boolean {
+  const precedence = expressionPrecedence(expression);
+  if (precedence < parentPrecedence) return true;
+  if (precedence > parentPrecedence) return false;
+  return side === "right";
+}
+
+function lowerExpressionOperand(
+  context: ScriptContext,
+  expression: any,
+  aliases: Map<string, string>,
+  parentPrecedence: number,
+  side: "left" | "right" | "operand",
+): string {
+  const code = lowerExpression(context, expression, aliases);
+  return needsExpressionParens(expression, parentPrecedence, side)
+    ? `(${code})`
+    : code;
+}
+
 function lowerExpression(
   context: ScriptContext,
   expression: any,
@@ -1261,12 +1354,14 @@ function lowerExpression(
     case "NullLiteral":
       return "null";
     case "BinaryExpression":
-    case "LogicalExpression":
-      return `${lowerExpression(context, node.left, aliases)} ${node.operator} ${lowerExpression(context, node.right, aliases)}`;
+    case "LogicalExpression": {
+      const precedence = expressionPrecedence(node);
+      return `${lowerExpressionOperand(context, node.left, aliases, precedence, "left")} ${node.operator} ${lowerExpressionOperand(context, node.right, aliases, precedence, "right")}`;
+    }
     case "UnaryExpression":
-      return `${node.operator}${lowerExpression(context, node.argument, aliases)}`;
+      return `${node.operator}${lowerExpressionOperand(context, node.argument, aliases, expressionPrecedence(node), "operand")}`;
     case "AssignmentExpression":
-      return `${lowerExpression(context, node.left, aliases)} ${node.operator} ${lowerExpression(context, node.right, aliases)}`;
+      return `${lowerExpressionOperand(context, node.left, aliases, expressionPrecedence(node), "left")} ${node.operator} ${lowerExpressionOperand(context, node.right, aliases, expressionPrecedence(node), "right")}`;
     case "UpdateExpression": {
       const argument = lowerExpression(context, node.argument, aliases);
       return node.prefix
@@ -1307,7 +1402,13 @@ function lowerMemberExpression(
   node: any,
   aliases: Map<string, string>,
 ): string {
-  const object = lowerExpression(context, node.object, aliases);
+  const object = lowerExpressionOperand(
+    context,
+    node.object,
+    aliases,
+    expressionPrecedence(node),
+    "operand",
+  );
   if (node.computed) {
     return `${object}[${lowerExpression(context, node.property, aliases)}]`;
   }
@@ -1448,6 +1549,18 @@ function lowerTemplateStatementAsBlock(
   return `{\n  ${lowerTemplateStatement(context, statement)}\n}`;
 }
 
+function lowerTemplateExpressionOperand(
+  context: TemplateContext,
+  expression: any,
+  parentPrecedence: number,
+  side: "left" | "right" | "operand",
+): string {
+  const code = lowerTemplateExpression(context, expression);
+  return needsExpressionParens(expression, parentPrecedence, side)
+    ? `(${code})`
+    : code;
+}
+
 function lowerTemplateExpression(
   context: TemplateContext,
   expression: any,
@@ -1470,12 +1583,14 @@ function lowerTemplateExpression(
     case "ConditionalExpression":
       return `${lowerTemplateExpression(context, node.test)} ? ${lowerTemplateExpression(context, node.consequent)} : ${lowerTemplateExpression(context, node.alternate)}`;
     case "BinaryExpression":
-    case "LogicalExpression":
-      return `${lowerTemplateExpression(context, node.left)} ${node.operator} ${lowerTemplateExpression(context, node.right)}`;
+    case "LogicalExpression": {
+      const precedence = expressionPrecedence(node);
+      return `${lowerTemplateExpressionOperand(context, node.left, precedence, "left")} ${node.operator} ${lowerTemplateExpressionOperand(context, node.right, precedence, "right")}`;
+    }
     case "UnaryExpression":
-      return `${node.operator}${lowerTemplateExpression(context, node.argument)}`;
+      return `${node.operator}${lowerTemplateExpressionOperand(context, node.argument, expressionPrecedence(node), "operand")}`;
     case "AssignmentExpression":
-      return `${lowerTemplateExpression(context, node.left)} ${node.operator} ${lowerTemplateExpression(context, node.right)}`;
+      return `${lowerTemplateExpressionOperand(context, node.left, expressionPrecedence(node), "left")} ${node.operator} ${lowerTemplateExpressionOperand(context, node.right, expressionPrecedence(node), "right")}`;
     case "UpdateExpression": {
       const argument = lowerTemplateExpression(context, node.argument);
       return node.prefix
@@ -1533,7 +1648,12 @@ function lowerTemplateMemberExpression(
   if (object.type === "Identifier" && object.name === "props") {
     base = "_vm_";
   } else {
-    base = lowerTemplateExpression(context, object);
+    base = lowerTemplateExpressionOperand(
+      context,
+      object,
+      expressionPrecedence(node),
+      "operand",
+    );
   }
 
   const operator = node.optional ? "?." : ".";
@@ -1557,7 +1677,12 @@ function lowerTemplateCallExpression(
   }
 
   const optional = node.optional ? "?." : "";
-  const callee = lowerTemplateExpression(context, node.callee);
+  const callee = lowerTemplateExpressionOperand(
+    context,
+    node.callee,
+    expressionPrecedence(node),
+    "operand",
+  );
   const args = node.arguments
     .map((arg: any) => {
       if (arg.type === "SpreadElement") {
@@ -1650,18 +1775,28 @@ const TEMPLATE_GLOBALS = new Set([
   "Object",
   "Promise",
   "String",
+  "app",
+  "audio",
+  "cipher",
   "console",
+  "device",
   "false",
+  "file",
+  "geolocation",
   "isFinite",
   "isNaN",
   "null",
   "parseFloat",
   "parseInt",
+  "prompt",
   "network",
+  "record",
   "router",
+  "sensor",
   "storage",
   "true",
   "undefined",
+  "vibrator",
   "velaBattery",
   "velaBluetoothBLE",
   "velaBrightness",
@@ -1680,6 +1815,7 @@ const TEMPLATE_GLOBALS = new Set([
   "velaServiceClient",
   "velaVolume",
   "velaZlib",
+  "zip",
 ]);
 
 function findTopLevelBinding(body: any[], name: string): any | undefined {

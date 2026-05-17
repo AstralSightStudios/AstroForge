@@ -1,0 +1,19 @@
+{
+  "name": "fixture-19-system-prompt-astroforge",
+  "version": "0.0.1",
+  "private": true,
+  "description": "fixture 19 的 AstroForge 实现，用于对照测试。",
+  "type": "module",
+  "scripts": {
+    "build": "astroforge build --target vela",
+    "dev": "astroforge dev"
+  },
+  "dependencies": {
+    "@astralsight/astroforge-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@rsbuild/core": "^2.0.6",
+    "@astralsight/astroforge-rsbuild-plugin": "workspace:*",
+    "@astralsight/astroforge": "workspace:*"
+  }
+}

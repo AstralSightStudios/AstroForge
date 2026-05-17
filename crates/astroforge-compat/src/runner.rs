@@ -18,7 +18,9 @@ use walkdir::WalkDir;
 use zip::ZipArchive;
 
 use crate::ir_diff::diff_values;
-use crate::normalize::{RuntimeCall, normalize_json, runtime_call_sequence};
+use crate::normalize::{
+    RuntimeCall, app_module_require_sequence, normalize_json, runtime_call_sequence,
+};
 
 const META_CERT: &str = "META-INF/CERT";
 const RPK_SIG_MAGIC: &[u8; 16] = b"RPK Sig Block 42";
@@ -116,6 +118,8 @@ pub struct SideSummary {
     pub files: Vec<String>,
     pub manifest: Option<serde_json::Value>,
     pub runtime_calls: Vec<RuntimeCallEntry>,
+    #[serde(default)]
+    pub system_requires: Vec<SystemRequireEntry>,
 }
 
 /// 单个 JS 文件中的运行时调用序列。
@@ -125,12 +129,20 @@ pub struct RuntimeCallEntry {
     pub calls: Vec<RuntimeCall>,
 }
 
+/// 单个 JS 文件中的系统桥接 require 序列。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemRequireEntry {
+    pub file: String,
+    pub modules: Vec<String>,
+}
+
 /// AstroForge 与官方产物的分级对照摘要。
 #[derive(Debug, Clone, Serialize)]
 pub struct ComparisonReport {
     pub files: DiffBucket,
     pub manifest: DiffBucket,
     pub runtime_calls: DiffBucket,
+    pub system_requires: DiffBucket,
     pub rpk_structure: DiffBucket,
 }
 
@@ -213,7 +225,7 @@ fn run_astroforge_side(fixture: &Utf8Path) -> Result<BuildSideReport> {
     let project = fixture.join("astroforge");
     let rpk = fixture.join("golden/astroforge/app.rpk");
     let unpacked = fixture.join("golden/astroforge/unpacked");
-    let status = Command::new("pnpm")
+    let status = Command::new(pnpm_bin())
         .arg("--dir")
         .arg(&project)
         .arg("exec")
@@ -241,6 +253,10 @@ fn run_astroforge_side(fixture: &Utf8Path) -> Result<BuildSideReport> {
         summary: Some(summary),
         status: "built".into(),
     })
+}
+
+fn pnpm_bin() -> &'static str {
+    if cfg!(windows) { "pnpm.cmd" } else { "pnpm" }
 }
 
 fn run_official_side(fixture: &Utf8Path) -> Result<BuildSideReport> {
@@ -391,6 +407,7 @@ fn write_side_summary(unpacked: &Utf8Path, out: &Utf8Path) -> Result<Utf8PathBuf
 fn collect_side_summary(unpacked: &Utf8Path) -> Result<SideSummary> {
     let mut files = Vec::new();
     let mut runtime_calls = Vec::new();
+    let mut system_requires = Vec::new();
     for entry in WalkDir::new(unpacked).sort_by_file_name() {
         let entry = entry.context("读取 unpacked 文件失败")?;
         if !entry.file_type().is_file() {
@@ -408,13 +425,18 @@ fn collect_side_summary(unpacked: &Utf8Path) -> Result<SideSummary> {
             let source = fs::read_to_string(entry.path())
                 .with_context(|| format!("读取 JS 文件失败：{}", entry.path().display()))?;
             runtime_calls.push(RuntimeCallEntry {
-                file: rel,
+                file: rel.clone(),
                 calls: runtime_call_sequence(&source),
+            });
+            system_requires.push(SystemRequireEntry {
+                file: rel,
+                modules: app_module_require_sequence(&source),
             });
         }
     }
     files.sort();
     runtime_calls.sort_by(|a, b| a.file.cmp(&b.file));
+    system_requires.sort_by(|a, b| a.file.cmp(&b.file));
 
     let manifest = fs::read_to_string(unpacked.join("manifest.json"))
         .ok()
@@ -425,6 +447,7 @@ fn collect_side_summary(unpacked: &Utf8Path) -> Result<SideSummary> {
         files,
         manifest,
         runtime_calls,
+        system_requires,
     })
 }
 
@@ -451,6 +474,10 @@ fn compare_sides(fixture: &Utf8Path) -> Result<ComparisonReport> {
         runtime_calls: compare_json(
             &runtime_callee_sequence(&astroforge),
             &runtime_callee_sequence(&official),
+        )?,
+        system_requires: compare_json(
+            &system_require_sequence(&astroforge),
+            &system_require_sequence(&official),
         )?,
         rpk_structure: compare_json(
             &normalized_rpk_structure(&inspect_rpk_structure(
@@ -481,6 +508,10 @@ pub fn compare_summaries_only(fixture: &Utf8Path) -> Result<SummaryComparison> {
             &runtime_callee_sequence(&astroforge),
             &runtime_callee_sequence(&official),
         )?,
+        system_requires: compare_json(
+            &system_require_sequence(&astroforge),
+            &system_require_sequence(&official),
+        )?,
     })
 }
 
@@ -490,6 +521,7 @@ pub struct SummaryComparison {
     pub files: DiffBucket,
     pub manifest: DiffBucket,
     pub runtime_calls: DiffBucket,
+    pub system_requires: DiffBucket,
 }
 
 fn inspect_rpk_structure(path: &Utf8Path) -> Result<RpkStructureSummary> {
@@ -732,6 +764,19 @@ fn runtime_callee_sequence(summary: &SideSummary) -> Vec<String> {
                 .calls
                 .iter()
                 .map(|call| format!("{}:{}", entry.file, call.callee))
+        })
+        .collect()
+}
+
+fn system_require_sequence(summary: &SideSummary) -> Vec<String> {
+    summary
+        .system_requires
+        .iter()
+        .flat_map(|entry| {
+            entry
+                .modules
+                .iter()
+                .map(|module| format!("{}:{module}", entry.file))
         })
         .collect()
 }

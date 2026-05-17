@@ -378,7 +378,7 @@ fn run_dev(root: &camino::Utf8Path, install: bool, no_rsbuild: bool) -> Result<(
     let mut rsbuild_child = if no_rsbuild {
         None
     } else {
-        let child = ProcessCommand::new("pnpm")
+        let child = ProcessCommand::new(pnpm_bin())
             .arg("--dir")
             .arg(root)
             .arg("exec")
@@ -548,7 +548,7 @@ fn signing_config_for(
 }
 
 fn run_rsbuild_build(root: &camino::Utf8Path) -> Result<()> {
-    let status = ProcessCommand::new("pnpm")
+    let status = ProcessCommand::new(pnpm_bin())
         .arg("--dir")
         .arg(root)
         .arg("exec")
@@ -563,6 +563,10 @@ fn run_rsbuild_build(root: &camino::Utf8Path) -> Result<()> {
         anyhow::bail!("Rsbuild build 退出码：{status}");
     }
     Ok(())
+}
+
+fn pnpm_bin() -> &'static str {
+    if cfg!(windows) { "pnpm.cmd" } else { "pnpm" }
 }
 
 fn run_test_compat(fixtures: &camino::Utf8Path, official: bool) -> Result<()> {

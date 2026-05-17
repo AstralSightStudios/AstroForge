@@ -43,6 +43,30 @@ pub fn runtime_call_sequence(source: &str) -> Vec<RuntimeCall> {
     calls
 }
 
+/// 提取页面模块中的系统桥接 require。
+///
+/// aiot-toolkit 与 AstroForge 都会把 `@system.*` 归一为
+/// `$app_require$("@app-module/system.*")` 形态；记录这个序列可以覆盖
+/// “模板事件里用了 bridge，但页面模块没有 require”的回归。
+pub fn app_module_require_sequence(source: &str) -> Vec<String> {
+    let normalized = normalize_js(source);
+    let marker = "@app-module/";
+    let mut modules = Vec::new();
+    let mut start = 0;
+    while let Some(pos) = normalized[start..].find(marker) {
+        let module_start = start + pos + marker.len();
+        let Some(module_end) = normalized[module_start..]
+            .find(['"', '\''])
+            .map(|end| module_start + end)
+        else {
+            break;
+        };
+        modules.push(normalized[module_start..module_end].to_owned());
+        start = module_end + 1;
+    }
+    modules
+}
+
 /// 运行时调用序列项。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeCall {
@@ -108,5 +132,14 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["__cc__", "__ce__"]
         );
+    }
+
+    #[test]
+    fn app_module_require_sequence_extracts_bridge_modules() {
+        let modules = app_module_require_sequence(
+            r#"var prompt = $app_require$("@app-module/system.prompt");
+               var router = $app_require$1('@app-module/system.router');"#,
+        );
+        assert_eq!(modules, vec!["system.prompt", "system.router"]);
     }
 }

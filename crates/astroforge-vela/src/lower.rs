@@ -15,6 +15,8 @@ use indexmap::IndexMap;
 use serde::Serialize;
 use serde_json::{Map, Value};
 
+use crate::style::{expand_border_shorthand, insert_border_declarations};
+
 /// Vela 后端打印器的完整输入。
 #[derive(Debug, Clone)]
 pub struct LoweredDocument {
@@ -162,8 +164,52 @@ fn detect_system_requires(source: &str) -> Vec<SystemRequire> {
             module: "system.router",
         },
         SystemRequire {
+            local: "app",
+            module: "system.app",
+        },
+        SystemRequire {
+            local: "prompt",
+            module: "system.prompt",
+        },
+        SystemRequire {
             local: "storage",
             module: "system.storage",
+        },
+        SystemRequire {
+            local: "cipher",
+            module: "system.cipher",
+        },
+        SystemRequire {
+            local: "sensor",
+            module: "system.sensor",
+        },
+        SystemRequire {
+            local: "geolocation",
+            module: "system.geolocation",
+        },
+        SystemRequire {
+            local: "vibrator",
+            module: "system.vibrator",
+        },
+        SystemRequire {
+            local: "file",
+            module: "system.file",
+        },
+        SystemRequire {
+            local: "zip",
+            module: "system.zip",
+        },
+        SystemRequire {
+            local: "device",
+            module: "system.device",
+        },
+        SystemRequire {
+            local: "audio",
+            module: "system.audio",
+        },
+        SystemRequire {
+            local: "record",
+            module: "system.record",
         },
         SystemRequire {
             local: "velaLocale",
@@ -240,7 +286,7 @@ fn detect_system_requires(source: &str) -> Vec<SystemRequire> {
     ];
 
     for item in candidates {
-        if contains_identifier(source, item.local) {
+        if contains_object_usage(source, item.local) {
             out.push(item);
         }
     }
@@ -340,11 +386,10 @@ fn detect_network_requires(source: &str) -> Vec<SystemRequire> {
     out
 }
 
-fn contains_member_access(source: &str, object: &str, member: &str) -> bool {
-    let pattern = format!("{object}.{member}");
+fn contains_object_usage(source: &str, object: &str) -> bool {
     let bytes = source.as_bytes();
-    let needle = pattern.as_bytes();
-    if bytes.len() < needle.len() {
+    let needle = object.as_bytes();
+    if needle.is_empty() || bytes.len() <= needle.len() {
         return false;
     }
 
@@ -353,18 +398,25 @@ fn contains_member_access(source: &str, object: &str, member: &str) -> bool {
             continue;
         }
         let before = idx.checked_sub(1).and_then(|i| bytes.get(i)).copied();
-        let after = bytes.get(idx + needle.len()).copied();
-        if !is_ident_byte(before) && !is_ident_byte(after) {
-            return true;
+        if is_ident_byte(before) {
+            continue;
+        }
+        let after_idx = idx + needle.len();
+        match bytes.get(after_idx).copied() {
+            Some(b'.' | b'[') => return true,
+            Some(b'?') if bytes.get(after_idx + 1) == Some(&b'.') => return true,
+            _ => {}
         }
     }
+
     false
 }
 
-fn contains_identifier(source: &str, ident: &str) -> bool {
+fn contains_member_access(source: &str, object: &str, member: &str) -> bool {
+    let pattern = format!("{object}.{member}");
     let bytes = source.as_bytes();
-    let needle = ident.as_bytes();
-    if needle.is_empty() || bytes.len() < needle.len() {
+    let needle = pattern.as_bytes();
+    if bytes.len() < needle.len() {
         return false;
     }
 
@@ -393,11 +445,7 @@ fn lower_style_table(style: &StyleTable) -> Vec<StyleEntry> {
 }
 
 fn lower_style_rule(rule: &StyleRule) -> Vec<StyleEntry> {
-    let declarations: IndexMap<String, String> = rule
-        .declarations
-        .iter()
-        .map(|(name, value)| (kebab_to_camel(name), value.clone()))
-        .collect();
+    let declarations = normalize_style_declarations(&rule.declarations);
 
     rule.selectors
         .iter()
@@ -406,6 +454,23 @@ fn lower_style_rule(rule: &StyleRule) -> Vec<StyleEntry> {
             declarations: declarations.clone(),
         })
         .collect()
+}
+
+fn normalize_style_declarations(
+    declarations: &IndexMap<String, String>,
+) -> IndexMap<String, String> {
+    let mut out = IndexMap::new();
+    for (name, value) in declarations {
+        let name = kebab_to_camel(name);
+        if name == "border"
+            && let Some(border) = expand_border_shorthand(value)
+        {
+            insert_border_declarations(&mut out, &border);
+            continue;
+        }
+        out.insert(name, value.clone());
+    }
+    out
 }
 
 fn lower_selector(selector: &Selector) -> Vec<(u8, String)> {
@@ -713,6 +778,25 @@ mod tests {
     }
 
     #[test]
+    fn detects_prompt_require_from_template_bindings() {
+        let requires = detect_system_requires_for_template(
+            "{}",
+            &[Node::Expression(Binding {
+                path: "() => prompt.showToast({ message: 'ok' })".into(),
+                expr: Some("function(evt) { prompt.showToast({ message: 'ok' }); }".into()),
+                is_callable: true,
+            })],
+        );
+        assert_eq!(
+            requires
+                .iter()
+                .map(|item| (item.local, item.module))
+                .collect::<Vec<_>>(),
+            vec![("prompt", "system.prompt")]
+        );
+    }
+
+    #[test]
     fn detects_network_bridge_by_member() {
         let fetch_only = detect_system_requires(
             r#"{
@@ -803,5 +887,45 @@ mod tests {
             lowered[0].declarations.get("flexDirection"),
             Some(&"column".to_owned())
         );
+    }
+
+    #[test]
+    fn expands_border_shorthand_style_declaration() {
+        let style = StyleTable {
+            rules: vec![StyleRule {
+                selectors: vec![Selector {
+                    kind: SelectorKind::Class,
+                    name: "card".into(),
+                }],
+                declarations: [(
+                    "border".into(),
+                    "4px solid rgba(255, 255, 255, 0.06)".into(),
+                )]
+                .into_iter()
+                .collect(),
+            }],
+        };
+
+        let lowered = lower_style_table(&style);
+        assert_eq!(
+            lowered[0].declarations.keys().cloned().collect::<Vec<_>>(),
+            vec![
+                "borderTopColor",
+                "borderRightColor",
+                "borderBottomColor",
+                "borderLeftColor",
+                "borderStyle",
+                "borderTopWidth",
+                "borderRightWidth",
+                "borderBottomWidth",
+                "borderLeftWidth"
+            ]
+        );
+        assert_eq!(
+            lowered[0].declarations["borderTopColor"],
+            "rgba(255, 255, 255, 0.06)"
+        );
+        assert_eq!(lowered[0].declarations["borderStyle"], "solid");
+        assert_eq!(lowered[0].declarations["borderTopWidth"], "4px");
     }
 }

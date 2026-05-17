@@ -194,9 +194,9 @@ describe("TSX extraction", () => {
   it("keeps runtime bridge imports unqualified inside inline event handlers", () => {
     const page = extractPageFromTsx(
       `
-        import { View, router } from '@astralsight/astroforge-core';
+        import { View, prompt, router } from '@astralsight/astroforge-core';
         export default function Page() {
-          return <View onClick={() => router.push({ uri: "pages/detail" })} />;
+          return <View onClick={() => { router.push({ uri: "pages/detail" }); prompt.showToast({ message: "ok" }); }} />;
         }
       `,
       { route: "pages/index" },
@@ -207,6 +207,12 @@ describe("TSX extraction", () => {
     );
     expect((page.template[0] as any).value.events.click.expr).not.toContain(
       "_vm_.router",
+    );
+    expect((page.template[0] as any).value.events.click.expr).toContain(
+      'prompt.showToast({ message: "ok" })',
+    );
+    expect((page.template[0] as any).value.events.click.expr).not.toContain(
+      "_vm_.prompt",
     );
   });
 
@@ -245,6 +251,44 @@ describe("TSX extraction", () => {
         is_callable: false,
       },
     });
+  });
+
+  it("preserves arithmetic precedence while lowering template expressions", () => {
+    const page = extractPageFromTsx(
+      `
+        import { Text, View, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [height, setHeight] = useState(480);
+          return <View><Text>{(height - 600) / 2}</Text></View>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    const expression = (page.template[0] as any).value.children[0].value
+      .children[0];
+    expect(expression.value.expr).toBe("(_vm_.height - 600) / 2");
+  });
+
+  it("preserves arithmetic precedence while lowering script methods", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [height, setHeight] = useState(480);
+          function move() {
+            const top = (height - 600) / 2;
+            setHeight(top);
+          }
+          return <View onClick={move} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.methods.move).toContain(
+      "const top = (this.height - 600) / 2;",
+    );
   });
 
   it("maps extended built-in components to Vela tag names", () => {

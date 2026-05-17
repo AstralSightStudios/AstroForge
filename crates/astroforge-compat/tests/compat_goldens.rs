@@ -1,10 +1,10 @@
 //! 端到端 fixture 兼容性回归测试。
 //!
 //! 对所有 `fixtures/<NN>-name/` 目录下提交的 `golden/aiot/summary.json` 与
-//! `golden/astroforge/summary.json` 做三级 diff（files / manifest /
-//! runtime_calls）。容器层 rpk_structure 留给 CLI `--official` 子命令在带
-//! aiot-toolkit 的环境中执行，因为 RPK zip footer 字段（时间戳 / 压缩偏移）
-//! 不适合作为离线 golden 写死。
+//! `golden/astroforge/summary.json` 做离线 diff（files / manifest /
+//! runtime_calls / system_requires）。容器层 rpk_structure 留给 CLI
+//! `--official` 子命令在带 aiot-toolkit 的环境中执行，因为 RPK zip footer
+//! 字段（时间戳 / 压缩偏移）不适合作为离线 golden 写死。
 //!
 //! 若 fixture 缺失任一侧 summary，则测试跳过该 fixture 并显式 panic 报告，
 //! 防止误删 golden 后 CI 静默通过。
@@ -60,6 +60,12 @@ fn all_fixtures_have_zero_summary_diffs() {
                 comparison.runtime_calls.diff_count, comparison.runtime_calls.samples
             ));
         }
+        if comparison.system_requires.diff_count > 0 {
+            failures.push(format!(
+                "{name}: system_requires diff ({}): {:?}",
+                comparison.system_requires.diff_count, comparison.system_requires.samples
+            ));
+        }
     }
 
     assert!(
@@ -68,6 +74,40 @@ fn all_fixtures_have_zero_summary_diffs() {
         failures.len(),
         failures.join("\n  - ")
     );
+}
+
+#[test]
+fn system_prompt_fixture_requires_prompt_bridge() {
+    let fixture = workspace_root().join("fixtures/19-system-prompt");
+    let comparison = compare_summaries_only(&fixture)
+        .unwrap_or_else(|err| panic!("system-prompt fixture 对照失败：{err:?}"));
+    assert!(
+        comparison.system_requires.diff_count == 0,
+        "system.prompt require 序列应与官方一致：{:?}",
+        comparison.system_requires.samples
+    );
+
+    for side in ["astroforge", "aiot"] {
+        let summary_path = fixture.join(format!("golden/{side}/summary.json"));
+        let summary: serde_json::Value = serde_json::from_str(
+            &fs::read_to_string(&summary_path)
+                .unwrap_or_else(|err| panic!("读取 summary 失败：{summary_path}：{err}")),
+        )
+        .unwrap_or_else(|err| panic!("解析 summary 失败：{summary_path}：{err}"));
+        assert!(
+            summary["system_requires"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|entry| entry["file"] == "pages/index/index.js"
+                    && entry["modules"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .any(|module| module == "system.prompt")),
+            "{side} summary 应记录 pages/index/index.js 对 system.prompt 的 require"
+        );
+    }
 }
 
 fn workspace_root() -> Utf8PathBuf {

@@ -13,6 +13,7 @@ use serde_json::Value;
 
 use crate::VelaBuildOutput;
 use crate::lower::{LoweredComponent, LoweredDocument, LoweredPage, SystemRequire};
+use crate::style::{expand_border_shorthand, insert_border_declarations};
 
 /// 打印完整 Vela 后端输出。
 pub fn emit_build_output(ir: &IrDocument, lowered: LoweredDocument) -> Result<VelaBuildOutput> {
@@ -562,16 +563,22 @@ fn style_object_expr(
     slots: &[astroforge_ir::component::StyleSlot],
     scope: &TemplateScope,
 ) -> String {
-    let entries = slots
-        .iter()
-        .map(|slot| {
-            let value = match &slot.value {
-                StyleSlotValue::Static(value) => json_source(value),
-                StyleSlotValue::Dynamic(binding) => scope.binding_expr(binding),
-            };
-            (kebab_to_camel(&slot.name), value)
-        })
-        .collect();
+    let mut entries = Vec::new();
+    for slot in slots {
+        let name = kebab_to_camel(&slot.name);
+        if name == "border"
+            && let StyleSlotValue::Static(Value::String(value)) = &slot.value
+            && push_border_source_entries(&mut entries, value)
+        {
+            continue;
+        }
+
+        let value = match &slot.value {
+            StyleSlotValue::Static(value) => json_source(value),
+            StyleSlotValue::Dynamic(binding) => scope.binding_expr(binding),
+        };
+        entries.push((name, value));
+    }
     object_source(entries)
 }
 
@@ -580,12 +587,32 @@ fn style_static_source(value: &Value) -> String {
         return json_source(value);
     };
 
-    object_source(
-        object
-            .iter()
-            .map(|(name, value)| (kebab_to_camel(name), json_source(value)))
-            .collect(),
-    )
+    let mut entries = Vec::new();
+    for (name, value) in object {
+        let name = kebab_to_camel(name);
+        if name == "border"
+            && let Value::String(value) = value
+            && push_border_source_entries(&mut entries, value)
+        {
+            continue;
+        }
+        entries.push((name, json_source(value)));
+    }
+    object_source(entries)
+}
+
+fn push_border_source_entries(entries: &mut Vec<(String, String)>, value: &str) -> bool {
+    let Some(border) = expand_border_shorthand(value) else {
+        return false;
+    };
+    let mut expanded = IndexMap::new();
+    insert_border_declarations(&mut expanded, &border);
+    entries.extend(
+        expanded
+            .into_iter()
+            .map(|(name, value)| (name, js_string(&value))),
+    );
+    true
 }
 
 enum ValueSource {
@@ -830,6 +857,28 @@ mod tests {
             !js.contains("$translateStyle$"),
             "静态对象 style 不应包装在 $translateStyle$ 调用中"
         );
+    }
+
+    #[test]
+    fn emits_inline_border_shorthand_as_expanded_edges() {
+        let mut attrs = IndexMap::new();
+        attrs.insert(
+            "style".to_owned(),
+            Attr::Static(json!({ "border": "4px solid rgba(255, 255, 255, 0.06)" })),
+        );
+        let node = Node::Element(Element {
+            tag: "div".into(),
+            is_component: false,
+            attrs,
+            events: IndexMap::new(),
+            children: vec![],
+        });
+
+        let js = node_expression(&node, &TemplateScope::default()).unwrap();
+        assert!(js.contains("borderTopColor: \"rgba(255, 255, 255, 0.06)\""));
+        assert!(js.contains("borderStyle: \"solid\""));
+        assert!(js.contains("borderTopWidth: \"4px\""));
+        assert!(!js.contains("border: \"4px solid"));
     }
 
     #[test]

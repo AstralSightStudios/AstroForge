@@ -1,0 +1,11 @@
+{
+  "name": "fixture-19-system-prompt-official",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "aiot build"
+  },
+  "devDependencies": {
+    "aiot-toolkit": "^1.0.0"
+  }
+}

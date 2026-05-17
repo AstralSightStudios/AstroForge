@@ -1,0 +1,18 @@
+<template>
+  <div onclick="showPrompt">
+    <text>Show prompt</text>
+  </div>
+</template>
+
+<script>
+import prompt from '@system.prompt'
+
+export default {
+  showPrompt() {
+    prompt.showToast({ message: 'Prompt opened' })
+  }
+}
+</script>
+
+<style>
+</style>

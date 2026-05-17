@@ -1,0 +1,16 @@
+import type { AstroForgePluginOptions } from "@astralsight/astroforge-rsbuild-plugin";
+
+export default {
+  manifest: {
+    package: "com.astroforge.fixture.prompt",
+    name: "fixture-19-system-prompt",
+    versionName: "1.0.0",
+    versionCode: 1,
+    minPlatformVersion: 1200,
+    icon: "/common/logo.png",
+    deviceTypeList: ["watch"],
+    features: [{ name: "system.prompt" }],
+    config: { logLevel: "log", designWidth: "device-width" },
+  },
+  plugin: { target: "vela" } satisfies AstroForgePluginOptions,
+};

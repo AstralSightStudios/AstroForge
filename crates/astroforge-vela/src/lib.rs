@@ -12,6 +12,7 @@
 
 pub mod emit;
 pub mod lower;
+mod style;
 
 /// 执行 Vela 后端构建，生成打包器可消费的文件集合。
 pub fn build(ir: astroforge_ir::page::IrDocument) -> anyhow::Result<VelaBuildOutput> {

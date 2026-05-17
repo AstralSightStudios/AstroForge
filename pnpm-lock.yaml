@@ -321,6 +321,22 @@ importers:
         specifier: ^2.0.6
         version: 2.0.6
 
+  fixtures/19-system-prompt/astroforge:
+    dependencies:
+      '@astralsight/astroforge-core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+    devDependencies:
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
+        specifier: workspace:*
+        version: link:../../../packages/rsbuild-plugin-astroforge
+      '@rsbuild/core':
+        specifier: ^2.0.6
+        version: 2.0.6
+
   packages/cli-darwin-arm64: {}
 
   packages/cli-darwin-x64: {}
