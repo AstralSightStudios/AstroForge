@@ -29,4 +29,6 @@ export function jsxs(_type: unknown, _props: unknown, _key?: unknown): never {
   throw new Error(NOT_REACHABLE);
 }
 
-export const Fragment: unique symbol = Symbol("astroforge.Fragment");
+export const Fragment = Symbol("astroforge.Fragment") as unknown as FC<
+  PropsWithChildren
+>;

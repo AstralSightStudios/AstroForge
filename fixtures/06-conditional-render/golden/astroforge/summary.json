@@ -43,26 +43,36 @@
       "file": "pages/index/index.js",
       "calls": [
         {
-          "offset": 3357,
+          "offset": 1084,
           "callee": "__ce__"
         },
         {
-          "offset": 3409,
+          "offset": 1136,
           "callee": "__ci__"
         },
         {
-          "offset": 3520,
+          "offset": 1247,
           "callee": "__ce__"
         },
         {
-          "offset": 3598,
+          "offset": 1325,
           "callee": "__ci__"
         },
         {
-          "offset": 3710,
+          "offset": 1437,
           "callee": "__ce__"
         }
       ]
+    }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": []
     }
   ]
 }

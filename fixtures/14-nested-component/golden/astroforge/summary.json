@@ -43,22 +43,32 @@
       "file": "pages/index/index.js",
       "calls": [
         {
-          "offset": 3391,
+          "offset": 1136,
           "callee": "__ce__"
         },
         {
-          "offset": 3509,
+          "offset": 1254,
           "callee": "__ce__"
         },
         {
-          "offset": 4148,
+          "offset": 1899,
           "callee": "__ce__"
         },
         {
-          "offset": 4200,
+          "offset": 1951,
           "callee": "__cc__"
         }
       ]
+    }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": []
     }
   ]
 }

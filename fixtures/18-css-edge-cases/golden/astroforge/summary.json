@@ -44,14 +44,24 @@
       "file": "pages/index/index.js",
       "calls": [
         {
-          "offset": 3580,
+          "offset": 1339,
           "callee": "__ce__"
         },
         {
-          "offset": 3653,
+          "offset": 1412,
           "callee": "__ce__"
         }
       ]
+    }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": []
     }
   ]
 }

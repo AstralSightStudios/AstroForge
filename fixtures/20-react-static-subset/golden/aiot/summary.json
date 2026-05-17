@@ -1,0 +1,78 @@
+{
+  "files": [
+    "META-INF/CERT",
+    "META-INF/build.txt",
+    "app.js",
+    "common/logo.png",
+    "manifest-watch.json",
+    "manifest.json",
+    "pages/index/index.js"
+  ],
+  "manifest": {
+    "package": "com.astroforge.fixture.reactstatic",
+    "name": "fixture-20-react-static-subset",
+    "versionName": "1.0.0",
+    "versionCode": 1,
+    "minPlatformVersion": 1200,
+    "icon": "/common/logo.png",
+    "simulationVersion": "default",
+    "deviceTypeList": [
+      "watch"
+    ],
+    "features": [],
+    "config": {
+      "logLevel": "log",
+      "designWidth": "device-width"
+    },
+    "router": {
+      "entry": "pages/index",
+      "pages": {
+        "pages/index": {
+          "component": "index"
+        }
+      }
+    },
+    "minAPILevel": 1
+  },
+  "runtime_calls": [
+    {
+      "file": "app.js",
+      "calls": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "calls": [
+        {
+          "offset": 1115,
+          "callee": "__ce__"
+        },
+        {
+          "offset": 1229,
+          "callee": "__ce__"
+        },
+        {
+          "offset": 1339,
+          "callee": "__ce__"
+        },
+        {
+          "offset": 3321,
+          "callee": "__ce__"
+        },
+        {
+          "offset": 3408,
+          "callee": "__cc__"
+        }
+      ]
+    }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": []
+    }
+  ]
+}

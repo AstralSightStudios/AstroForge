@@ -337,11 +337,46 @@ importers:
         specifier: ^2.0.6
         version: 2.0.6
 
+  fixtures/20-react-static-subset/astroforge:
+    dependencies:
+      '@astralsight/astroforge-core':
+        specifier: workspace:*
+        version: link:../../../packages/core
+    devDependencies:
+      '@astralsight/astroforge':
+        specifier: workspace:*
+        version: link:../../../packages/cli-js
+      '@astralsight/astroforge-rsbuild-plugin':
+        specifier: workspace:*
+        version: link:../../../packages/rsbuild-plugin-astroforge
+      '@rsbuild/core':
+        specifier: ^2.0.6
+        version: 2.0.6
+
   packages/cli-darwin-arm64: {}
 
   packages/cli-darwin-x64: {}
 
-  packages/cli-js: {}
+  packages/cli-js:
+    optionalDependencies:
+      '@astralsight/astroforge-cli-darwin-arm64':
+        specifier: 0.0.11
+        version: 0.0.11
+      '@astralsight/astroforge-cli-darwin-x64':
+        specifier: 0.0.11
+        version: 0.0.11
+      '@astralsight/astroforge-cli-linux-arm64-gnu':
+        specifier: 0.0.11
+        version: 0.0.11
+      '@astralsight/astroforge-cli-linux-x64-gnu':
+        specifier: 0.0.11
+        version: 0.0.11
+      '@astralsight/astroforge-cli-win32-arm64-msvc':
+        specifier: 0.0.11
+        version: 0.0.11
+      '@astralsight/astroforge-cli-win32-x64-msvc':
+        specifier: 0.0.11
+        version: 0.0.11
 
   packages/cli-linux-arm64-gnu: {}
 
@@ -370,6 +405,42 @@ importers:
   packages/runtime-vela: {}
 
 packages:
+
+  '@astralsight/astroforge-cli-darwin-arm64@0.0.11':
+    resolution: {integrity: sha512-B/jirwDPgqzt3hUnim7PWq/ejAW3ndJwA/cYGgL8e+Zce7UhV4YL8oUNnJHR93BOZWA2evKv4r/jdZe7idxZ2g==}
+    engines: {node: '>=18.18'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@astralsight/astroforge-cli-darwin-x64@0.0.11':
+    resolution: {integrity: sha512-Inco1hebZz7mlfSrGYZZivE3xFkL2BtsQh+xHU7LP8sQP9g0EUPnNdF94qU+lPfojdHpcp7xJwWHpW3Yao9BIw==}
+    engines: {node: '>=18.18'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@astralsight/astroforge-cli-linux-arm64-gnu@0.0.11':
+    resolution: {integrity: sha512-rKU5aZCyWgX7NVhFPEqUIrA3sr0BZzt/zFRlz0B5SbwoNVio8gnRMXAjp3SKic5CUYT9SbbR/Dqn8wqO6Khiew==}
+    engines: {node: '>=18.18'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@astralsight/astroforge-cli-linux-x64-gnu@0.0.11':
+    resolution: {integrity: sha512-OQxy4uA8sNq9BN1et7I9sPbcPHOFjqNpwzwZreT6VLFcCf1O1CUfvr9IBDuEQu1SRgsGLHKYJOpXr8jKaKhofA==}
+    engines: {node: '>=18.18'}
+    cpu: [x64]
+    os: [linux]
+
+  '@astralsight/astroforge-cli-win32-arm64-msvc@0.0.11':
+    resolution: {integrity: sha512-qrig8eEsBFIlJHrFYgKZ3aLX2lGgFrlis6KgfVDX/tgIptmyIXlQ7t3qRf9YujLHC1SJeplXCAadfZjccoXcTQ==}
+    engines: {node: '>=18.18'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@astralsight/astroforge-cli-win32-x64-msvc@0.0.11':
+    resolution: {integrity: sha512-99KcJixkhbhAWeKYQE8Vq9JlLJl1G/IzaMa8dOeD3mydMMRlP31GcHO0vaA3ypMKxnsPSU7NwGM0AKRAw+yFLw==}
+    engines: {node: '>=18.18'}
+    cpu: [x64]
+    os: [win32]
 
   '@babel/generator@8.0.0-rc.5':
     resolution: {integrity: sha512-nFZPWz3FHIS7y6rMIVoa/WBwjdutfIaRJIBQjzn+t3RnecZoRNlGmGcyR2wb0T/IgSd50Kz/6dG8/LvMCRunjg==}
@@ -1240,6 +1311,24 @@ packages:
     hasBin: true
 
 snapshots:
+
+  '@astralsight/astroforge-cli-darwin-arm64@0.0.11':
+    optional: true
+
+  '@astralsight/astroforge-cli-darwin-x64@0.0.11':
+    optional: true
+
+  '@astralsight/astroforge-cli-linux-arm64-gnu@0.0.11':
+    optional: true
+
+  '@astralsight/astroforge-cli-linux-x64-gnu@0.0.11':
+    optional: true
+
+  '@astralsight/astroforge-cli-win32-arm64-msvc@0.0.11':
+    optional: true
+
+  '@astralsight/astroforge-cli-win32-x64-msvc@0.0.11':
+    optional: true
 
   '@babel/generator@8.0.0-rc.5':
     dependencies:

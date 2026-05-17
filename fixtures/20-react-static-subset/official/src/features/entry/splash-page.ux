@@ -1,0 +1,34 @@
+<template>
+  <div onclick="tick">
+    <text>{{'count:' + count}}</text>
+    <text>{{count > 0 ? 'Ready' : 'Done'}}</text>
+  </div>
+</template>
+
+<script>
+export default {
+  private: {
+    count: 3,
+    intervalRef: {
+      current: null
+    }
+  },
+
+  onReady() {
+    this.intervalRef.current = setInterval(() => this.tick(), 16)
+  },
+
+  onDestroy() {
+    if (this.intervalRef.current) {
+      clearInterval(this.intervalRef.current)
+    }
+  },
+
+  tick() {
+    this.count = this.count - 1
+  }
+}
+</script>
+
+<style>
+</style>

@@ -1,0 +1,14 @@
+<template>
+  <div data-title="AstroForge">
+    <splash-page></splash-page>
+  </div>
+</template>
+
+<import name="splash-page" src="../../features/entry/splash-page.ux"></import>
+
+<script>
+export default {}
+</script>
+
+<style>
+</style>

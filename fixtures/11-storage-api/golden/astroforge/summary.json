@@ -47,13 +47,25 @@
       "file": "pages/index/index.js",
       "calls": [
         {
-          "offset": 3458,
+          "offset": 1225,
           "callee": "__ce__"
         },
         {
-          "offset": 3576,
+          "offset": 1343,
           "callee": "__ce__"
         }
+      ]
+    }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": [
+        "system.storage"
       ]
     }
   ]

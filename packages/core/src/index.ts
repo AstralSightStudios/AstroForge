@@ -6,4 +6,5 @@ export * from "./components";
 export { useState, useEffect, useRef, useMemo, useCallback } from "./hooks";
 export * from "./apis";
 export * from "./platform";
+export { Fragment } from "./jsx-runtime";
 export type { JSX } from "./jsx-runtime";

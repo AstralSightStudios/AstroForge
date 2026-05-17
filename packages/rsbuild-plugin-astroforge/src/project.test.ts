@@ -67,6 +67,10 @@ const cssFixtureRoot = resolve(
   repoRoot,
   "fixtures/18-css-edge-cases/astroforge",
 );
+const reactStaticFixtureRoot = resolve(
+  repoRoot,
+  "fixtures/20-react-static-subset/astroforge",
+);
 
 describe("AstroForge project compiler", () => {
   it("discovers pages and creates stable Rsbuild entries", () => {
@@ -524,6 +528,24 @@ export default function IndexPage() {
         },
       },
     ]);
+    expect(validateIrDocument(document)).toBe(true);
+  });
+
+  it("emits react-static-subset IR with stateful aliased component", () => {
+    const { document } = compileFixture(reactStaticFixtureRoot);
+    const component = document.components["splash-page"];
+
+    expect(document.pages["pages/index"].imports).toEqual({
+      "splash-page": "splash-page",
+    });
+    expect(component.script.private_data).toEqual({
+      count: 3,
+      intervalRef: { current: null },
+    });
+    expect(component.script.methods.tick).toContain(
+      "this.count = this.count - 1",
+    );
+    expect(component.script.lifecycle.onReady).toContain("this.tick()");
     expect(validateIrDocument(document)).toBe(true);
   });
 

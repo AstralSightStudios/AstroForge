@@ -51,11 +51,11 @@
       "file": "pages/detail/index.js",
       "calls": [
         {
-          "offset": 3327,
+          "offset": 1054,
           "callee": "__ce__"
         },
         {
-          "offset": 3379,
+          "offset": 1106,
           "callee": "__ce__"
         }
       ]
@@ -64,13 +64,29 @@
       "file": "pages/index/index.js",
       "calls": [
         {
-          "offset": 3445,
+          "offset": 1212,
           "callee": "__ce__"
         },
         {
-          "offset": 3562,
+          "offset": 1329,
           "callee": "__ce__"
         }
+      ]
+    }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/detail/index.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": [
+        "system.router"
       ]
     }
   ]

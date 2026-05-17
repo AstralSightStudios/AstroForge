@@ -73,5 +73,21 @@
         }
       ]
     }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/detail/index.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": [
+        "system.router"
+      ]
+    }
   ]
 }

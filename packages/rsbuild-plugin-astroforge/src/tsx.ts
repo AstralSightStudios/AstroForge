@@ -99,6 +99,7 @@ interface ScriptContext {
   filename?: string;
   stateVars: Set<string>;
   stateSetters: Map<string, string>;
+  methodVars: Set<string>;
   memoVars: Map<string, any>;
 }
 
@@ -891,6 +892,7 @@ function createScriptContext(source: string, filename?: string): ScriptContext {
     filename,
     stateVars: new Set(),
     stateSetters: new Map(),
+    methodVars: new Set(),
     memoVars: new Map(),
   };
 }
@@ -947,13 +949,26 @@ function collectUseStateDeclaration(
       );
     }
 
-    const initial = declarator.init.arguments[0];
+    const initial = useStateInitialExpression(context, declarator.init);
     script.private_data[stateId.name] = initial
       ? staticJsonValue(initial, context.filename)
       : null;
     context.stateVars.add(stateId.name);
     context.stateSetters.set(setterId.name, stateId.name);
   }
+}
+
+function useStateInitialExpression(
+  context: ScriptContext,
+  call: any,
+): any | undefined {
+  const initial = call.arguments[0];
+  if (!initial) return undefined;
+  const expression = unwrapExpression(initial);
+  if (isFunctionLike(expression)) {
+    return returnExpressionFromStaticFactory(context, expression, "useState");
+  }
+  return initial;
 }
 
 function collectUseRefDeclaration(
@@ -1008,6 +1023,7 @@ function collectMethod(script: Script, context: ScriptContext, statement: any) {
     if (!statement.id?.name) {
       return;
     }
+    context.methodVars.add(statement.id.name);
     script.methods[statement.id.name] = lowerFunctionLike(
       context,
       statement,
@@ -1029,6 +1045,7 @@ function collectMethod(script: Script, context: ScriptContext, statement: any) {
       continue;
     }
 
+    context.methodVars.add(declarator.id.name);
     script.methods[declarator.id.name] = lowerFunctionLike(
       context,
       unwrapExpression(declarator.init),
@@ -1056,6 +1073,7 @@ function collectUseCallbackMethod(
     }
 
     const callback = callbackFunctionFromCall(context, declarator.init);
+    context.methodVars.add(declarator.id.name);
     script.methods[declarator.id.name] = lowerFunctionLike(
       context,
       callback,
@@ -1610,6 +1628,9 @@ function lowerExpression(
       if (context.stateVars.has(node.name)) {
         return `this.${node.name}`;
       }
+      if (context.methodVars.has(node.name)) {
+        return `this.${node.name}`;
+      }
       return node.name;
     }
     case "ThisExpression":
@@ -1821,9 +1842,11 @@ function lowerStateSetterCall(
       aliases.set(firstParam.name, `this.${stateName}`);
     }
     if (expression.body.type === "BlockStatement") {
-      throw new Error(
-        `${context.filename ?? "TSX"}: setState updater 暂不支持 block body`,
-      );
+      return `this.${stateName} = ${lowerExpression(
+        context,
+        returnExpressionFromStaticFactory(context, expression, "setState updater"),
+        aliases,
+      )}`;
     }
     return `this.${stateName} = ${lowerExpression(context, expression.body, aliases)}`;
   }
@@ -2127,9 +2150,14 @@ function lowerTemplateStateSetterCall(
         ? ([[firstParam.name, `_vm_.${stateName}`]] as Array<[string, string]>)
         : [];
     if (expression.body.type === "BlockStatement") {
-      throw new Error(
-        `${context.filename ?? "TSX"}: setState updater 暂不支持 block body`,
-      );
+      return `_vm_.${stateName} = ${lowerTemplateExpression(
+        withTemplateAliases(context, aliases),
+        returnExpressionFromStaticFactory(
+          context.scriptContext,
+          expression,
+          "setState updater",
+        ),
+      )}`;
     }
     return `_vm_.${stateName} = ${lowerTemplateExpression(
       withTemplateAliases(context, aliases),
@@ -2284,7 +2312,15 @@ function templateFromRenderExpression(
   bindings: Map<string, string>,
   context: TemplateContext,
 ): Node[] {
-  const node = nodeFromJsx(expression, bindings, context);
+  const expressionNode = unwrapExpression(expression);
+  if (isEmptyRenderExpression(expressionNode)) {
+    return [];
+  }
+  if (!isJsxNode(expressionNode)) {
+    const node = nodeFromExpression(expressionNode, bindings, context);
+    return node.kind === "fragment" ? node.value : [node];
+  }
+  const node = nodeFromJsx(expressionNode, bindings, context);
   if (node.kind === "fragment") {
     return node.value;
   }
@@ -2298,6 +2334,12 @@ function nodeFromJsx(
 ): Node {
   switch (node.type) {
     case "JSXElement":
+      if (isFragmentElement(node)) {
+        return {
+          kind: "fragment",
+          value: childrenFromJsx(node.children, bindings, context),
+        };
+      }
       return {
         kind: "element",
         value: elementFromJsx(node, bindings, context),
@@ -2312,6 +2354,29 @@ function nodeFromJsx(
         `${context.filename ?? "TSX"}: 不支持的 JSX 根节点 ${node.type}`,
       );
   }
+}
+
+function isEmptyRenderExpression(node: any): boolean {
+  const expression = unwrapExpression(node);
+  return (
+    expression.type === "NullLiteral" ||
+    (expression.type === "BooleanLiteral" && expression.value === false)
+  );
+}
+
+function isFragmentElement(node: any): boolean {
+  if (node.type !== "JSXElement") return false;
+  const name = node.openingElement.name;
+  if (name.type === "JSXIdentifier") {
+    return name.name === "Fragment";
+  }
+  return (
+    name.type === "JSXMemberExpression" &&
+    name.object.type === "JSXIdentifier" &&
+    name.object.name === "React" &&
+    name.property.type === "JSXIdentifier" &&
+    name.property.name === "Fragment"
+  );
 }
 
 function elementFromJsx(

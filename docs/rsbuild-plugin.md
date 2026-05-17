@@ -13,17 +13,22 @@
   例如 `View` / `Text` / `Image` 分别转换为 `div` / `text` / `image`，
   `ListItem` / `ImageAnimator` 分别转换为 `list-item` / `image-animator`。
 - 提取静态文本、静态属性、动态属性绑定和事件绑定。
-- 提取页面函数内的事件处理方法，写入 Page IR 的 `script.methods`。
+- 提取页面 / 组件函数内的事件处理方法，写入对应 IR 的 `script.methods`。
 - 将 `useState` 的静态初值写入 `script.private_data`，并把简单 setter 调用下
   沉为对页面实例状态的直接赋值。
-- 将页面函数内的 `useEffect` 静态展开为生命周期：省略依赖或空依赖数组映射
+- 将页面 / 组件函数内的 `useEffect` 静态展开为生命周期：省略依赖或空依赖数组映射
   到 `onReady`，cleanup 函数映射到 `onDestroy`。
+- 将 `useRef`、`useMemo`、`useCallback` 的静态子集展开到 VM 数据、模板表达式
+  或方法表；这些 hook 不保留 React runtime 调度语义。
 - 将 JSX 三元表达式和 `&&` 表达式下沉为 Component IR 的 `conditional` 节点。
 - 将 `array.map((item, index) => <Node />)` 下沉为 Component IR 的 `list`
   节点，并把 JSX `key` 记录到 `List.key`。
 - 将页面模块导出的 `lifecycle` 对象写入 Page IR 的 `script.lifecycle`。
 - 将 `src/app.tsx` 的 default export 对象方法写入 IR 根节点的 `app.lifecycle`。
 - 提取同一页面模块内的 PascalCase 本地组件，并在 Page IR 中记录组件导入关系。
+- BFS 加载 JSX 实际使用到的跨文件 PascalCase 组件，支持相对路径、`@/foo` 与
+  `@features/foo` 这类 `src/` 别名；未作为 JSX 标签使用的 PascalCase import
+  会被视为普通数据 import，不触发组件提取。
 - 从组件首参的 TypeScript 注解推导 `script.props`，支持 type literal、
   interface、type alias 与解构默认值。
 - 提取相对 CSS import 与页面模块导出的静态 `style` / `styles` 字符串，转换
@@ -79,16 +84,22 @@ export default defineConfig({
 Phase 2 的 TSX 提取器以稳定 IR 为目标，当前只接受可直接映射到 Component IR
 的语法：
 
-- default export 必须是返回 JSX 的函数；
+- default export 必须是函数；返回 JSX、Fragment、条件 / 列表表达式、`null`
+  或 `false` 可静态下沉；
 - JSX spread 属性暂不支持；
 - 事件属性必须是表达式绑定，例如 `onClick={handleClick}` 或
   `onClick={() => handleClick()}`；
 - 动态属性和文本插值支持标识符 / 成员访问路径；文本插值可额外使用三元表
   达式与模板字符串；
-- `useState` 初值必须是静态 JSON 字面量；
+- `useState` 初值必须是静态 JSON 字面量；允许 `useState(() => 静态 JSON)` 惰性
+  初值；
 - `setState` updater 当前支持值表达式或单表达式箭头函数，例如
-  `setCount(count + 1)` 与 `setCount((prev) => prev + 1)`；
+  `setCount(count + 1)` 与 `setCount((prev) => prev + 1)`；block body updater
+  仅支持单个 `return` 表达式；
 - `useEffect` 仅支持省略依赖或空依赖数组；非空依赖数组暂不支持；
+- `useMemo` 仅支持可静态内联的表达式返回值；`useCallback` 仅下沉为 VM 方法；
+  依赖数组不具备 React 运行期重算 / 缓存语义；
+- `<Fragment>` 与短 Fragment 只作为编译期分组，不生成运行时组件；
 - 条件渲染的 guard 支持可静态下沉到模板闭包的表达式；
 - 列表渲染当前只支持直接的 `.map(...)` 调用，item / index 参数必须是标识符；
 - 页面生命周期必须通过 `export const lifecycle = { ... }` 声明；
@@ -125,3 +136,5 @@ Phase 2 的 TSX 提取器以稳定 IR 为目标，当前只接受可直接映射
 | `16-permission-manifest` | manifest features 透传                     |
 | `17-resource-path`       | 静态图片资源收集、资源 digest              |
 | `18-css-edge-cases`      | 静态 CSS 解析、复合覆盖选择器、at-rule     |
+| `19-system-prompt`       | inline handler 中的 prompt bridge require  |
+| `20-react-static-subset` | React 常用 hook / Fragment 写法静态展开     |

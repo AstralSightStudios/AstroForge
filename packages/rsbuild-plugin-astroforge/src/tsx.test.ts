@@ -419,6 +419,55 @@ describe("TSX extraction", () => {
     });
   });
 
+  it("supports lazy useState initializers and block-body updaters", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [count, setCount] = useState(() => 2);
+          function increment() {
+            setCount((prev) => {
+              return prev + 1;
+            });
+          }
+          return <View onClick={increment} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.private_data).toEqual({ count: 2 });
+    expect(page.script.methods.increment).toBe(
+      "function increment() {\n  this.count = this.count + 1;\n}",
+    );
+  });
+
+  it("supports Fragment elements and empty top-level render returns", () => {
+    const fragmentPage = extractPageFromTsx(
+      `
+        import { Fragment, Text } from '@astralsight/astroforge-core';
+        export default function Page() {
+          return <Fragment><Text>A</Text><Text>B</Text></Fragment>;
+        }
+      `,
+      { route: "pages/index" },
+    );
+    const emptyPage = extractPageFromTsx(
+      `
+        export default function Page() {
+          return null;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(fragmentPage.template).toMatchObject([
+      { kind: "element", value: { tag: "text" } },
+      { kind: "element", value: { tag: "text" } },
+    ]);
+    expect(emptyPage.template).toEqual([]);
+  });
+
   it("lowers ternary JSX into conditional Component IR", () => {
     const page = extractPageFromTsx(
       `
@@ -619,6 +668,28 @@ describe("TSX extraction", () => {
       "this.count = this.count - 1",
     );
     expect(page.script.lifecycle.onReady).not.toContain("setCount");
+  });
+
+  it("qualifies local callbacks referenced from lifecycle closures", () => {
+    const page = extractPageFromTsx(
+      `
+        import { View, useCallback, useEffect, useState } from '@astralsight/astroforge-core';
+        export default function Page() {
+          const [count, setCount] = useState(2);
+          const tick = useCallback(() => {
+            setCount((prev) => prev - 1);
+          }, []);
+          useEffect(() => {
+            setInterval(() => tick(), 16);
+          }, []);
+          return <View onClick={tick} />;
+        }
+      `,
+      { route: "pages/index" },
+    );
+
+    expect(page.script.lifecycle.onReady).toContain("this.tick()");
+    expect(page.script.methods.tick).toContain("this.count = this.count - 1");
   });
 
   it("extracts useRef and useCallback into component VM script", () => {

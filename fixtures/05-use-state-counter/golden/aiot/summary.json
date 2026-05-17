@@ -60,5 +60,15 @@
         }
       ]
     }
+  ],
+  "system_requires": [
+    {
+      "file": "app.js",
+      "modules": []
+    },
+    {
+      "file": "pages/index/index.js",
+      "modules": []
+    }
   ]
 }
